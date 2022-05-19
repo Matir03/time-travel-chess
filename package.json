@@ -1,0 +1,19 @@
+{
+  "name": "time-travel-chess",
+  "version": "1.0.0",
+  "description": "Time Travel Chess",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Matir03/time-travel-chess.git"
+  },
+  "author": "Ritam Nag",
+  "license": "GPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/Matir03/time-travel-chess/issues"
+  },
+  "homepage": "https://github.com/Matir03/time-travel-chess#readme"
+}
