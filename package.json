@@ -15,5 +15,8 @@
   "bugs": {
     "url": "https://github.com/Matir03/time-travel-chess/issues"
   },
-  "homepage": "https://github.com/Matir03/time-travel-chess#readme"
+  "homepage": "https://github.com/Matir03/time-travel-chess#readme",
+  "dependencies": {
+    "chessground": "^8.2.1"
+  }
 }
