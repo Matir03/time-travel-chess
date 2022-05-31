@@ -4,7 +4,8 @@
   "description": "Time Travel Chess",
   "main": "main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "serve": "http-server"
   },
   "repository": {
     "type": "git",
@@ -17,6 +18,11 @@
   },
   "homepage": "https://github.com/Matir03/time-travel-chess#readme",
   "dependencies": {
-    "chessground": "^8.2.1"
+    "chessground": "^8.2.1",
+    "common-js": "^0.3.8"
+  },
+  "devDependencies": {
+    "@types/node": "^17.0.36",
+    "http-server": "^14.1.0"
   }
 }
