@@ -1,0 +1,17 @@
+{
+  "name": "ttc-server",
+  "version": "1.0.0",
+  "description": "Server for Time Travel Chess",
+  "main": "out/server.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "serve": "node out/server.js"
+  },
+  "devDependencies": {
+    "typescript": "^4.7.2"
+  },
+  "dependencies": {
+    "socket.io": "^4.5.1"
+  }
+}
