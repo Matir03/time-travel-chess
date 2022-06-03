@@ -1,11 +1,26 @@
 import { SOCKET_ADDR } from './config';
-import { io } from 'socket.io-client';
+import { Socket, io } from 'socket.io-client';
 import { Lobby } from './lobby';
 import { Game } from './game';
+import { classModule, eventListenersModule, h, init, 
+    propsModule, styleModule, VNode } from 'snabbdom';
+import { ClientToServerEvents, ServerToClientEvents } from './commontypes';
 
-document.body.innerHTML = `Connecting to server at ${SOCKET_ADDR}`
+const patch = init([
+    classModule,
+    propsModule,
+    styleModule,
+    eventListenersModule
+])
 
-const socket = io('ws://' + SOCKET_ADDR);
+let root = h('div');
+patch(document.getElementById("root"), root);
+const setView = (node: VNode) => root = patch(root, node);
+
+setView(h('p', `Connecting to server at ${SOCKET_ADDR}`));
+
+const socket: Socket<ServerToClientEvents, ClientToServerEvents>
+    = io('ws://' + SOCKET_ADDR);
 
 socket.on("connect", () => {
     console.log("Connected!");
@@ -16,23 +31,29 @@ socket.on("connect_error", (err) => {
 })
 
 socket.on("disconnect", (reason) => {
-    console.log(`Disconnected from server because: ${reason}\n`);
+    console.log(`Disconnected from server because: ${reason}`);
 });
 
-socket.on("join_lobby", (lobbyState) => {
-    socket.removeAllListeners("game_event");
+const lobby = new Lobby(
+    event => socket.emit("lobby_event", event));
 
-    let lobby = new Lobby(lobbyState, 
-        lobbyEvent => socket.emit("lobby_event", lobbyEvent));
-    
-    socket.on("lobby_event", lobby.on_event);
-})
+socket.on("join_lobby", (state) => {
+    lobby.setState(state);
+    setView(lobby.view());
+});
+socket.on("lobby_event", (event) => {
+    lobby.update(event);
+    setView(lobby.view());
+});
 
-socket.on("join_game", (gameState) => {
-    socket.removeAllListeners("lobby_event");
+const game = new Game(
+    event => socket.emit("game_event", event));
 
-    let game = new Game(gameState,
-        gameEvent => socket.emit("game_event", gameEvent));
-
-    socket.on("game_event", game.on_event);    
-})
+socket.on("join_game", (state) => {
+    game.setState(state);
+    setView(game.view());
+});
+socket.on("game_event", (event) => {
+    game.update(event);
+    setView(game.view());
+});

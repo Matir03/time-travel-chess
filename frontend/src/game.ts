@@ -1,14 +1,26 @@
 import { GameState, GameEvent } from './commontypes';
+import { h, VNode } from 'snabbdom';
 
-export class Game implements GameState {
+export class Game {
 
-    constructor(game: GameState, 
-        actor: (action: GameEvent) => void) {
+    state: GameState;
+
+    constructor(emitter: (event: GameEvent) => void) {
 
     }
 
-    on_event(gameEvent: GameEvent) {
+    setState(state: GameState) {
 
+    }
+
+    update(event: GameEvent) {
+        
+    }
+
+    view(): VNode {
+        return h(
+            'div'
+        );
     }
 
 }

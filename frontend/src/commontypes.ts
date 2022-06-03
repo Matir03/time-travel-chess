@@ -1,16 +1,32 @@
-export interface LobbyState {
+export interface Seek {
+    player: string;
+    color: "White" | "Black" | "Random";
+}
+
+export class LobbyState {
+    seeks: Seek[];
+}
+
+export class GameState {
 
 }
 
-export interface LobbyEvent {
+export class LobbyEvent {
 
 }
 
-export interface GameState {
+export class GameEvent {
 
 }
 
-export interface GameEvent {
-
+export interface ServerToClientEvents {
+    join_lobby:  (state: LobbyState) => void;
+    join_game:   (state: GameState)  => void;
+    lobby_event: (event: LobbyEvent) => void;
+    game_event:  (event: GameEvent)  => void;
 }
 
+export interface ClientToServerEvents {
+    lobby_event: (event: LobbyEvent) => void;
+    game_event:  (event: GameEvent)  => void;
+}
