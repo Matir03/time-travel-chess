@@ -1,6 +1,7 @@
 export class ServerLobby {
-    constructor(io) {
+    constructor() {
+        this.state = new LobbyState();
     }
-    on_event(lobbyEvent) {
+    addSeek() {
     }
 }

@@ -3,7 +3,7 @@ import { Socket, io } from 'socket.io-client';
 import { Lobby } from './lobby';
 import { Game } from './game';
 import { classModule, eventListenersModule, h, init, 
-    propsModule, styleModule, VNode } from 'snabbdom';
+    propsModule, styleModule, toVNode, VNode } from 'snabbdom';
 import { ClientToServerEvents, ServerToClientEvents } from './commontypes';
 
 const patch = init([
@@ -13,17 +13,19 @@ const patch = init([
     eventListenersModule
 ])
 
-let root = h('div');
-patch(document.getElementById("root"), root);
+let root = toVNode(document.getElementById("root"));
 const setView = (node: VNode) => root = patch(root, node);
 
-setView(h('p', `Connecting to server at ${SOCKET_ADDR}`));
+let pname = prompt("Enter a player name");
+
+setView(h('h1', `Connecting to server at ${SOCKET_ADDR}`));
 
 const socket: Socket<ServerToClientEvents, ClientToServerEvents>
     = io('ws://' + SOCKET_ADDR);
 
 socket.on("connect", () => {
     console.log("Connected!");
+    socket.emit("player_join", pname);
 });
 
 socket.on("connect_error", (err) => {
@@ -32,10 +34,16 @@ socket.on("connect_error", (err) => {
 
 socket.on("disconnect", (reason) => {
     console.log(`Disconnected from server because: ${reason}`);
+
+    if(reason === "io server disconnect") {
+        setView(h('h1', 'Disconnected by server'));
+    }
 });
 
-const lobby = new Lobby(
-    event => socket.emit("lobby_event", event));
+const lobby = new Lobby(pname, action => {
+    console.log(`Emitting action ${JSON.stringify(action)}`);
+    socket.emit("lobby_action", action);
+});
 
 socket.on("join_lobby", (state) => {
     lobby.setState(state);
@@ -47,7 +55,7 @@ socket.on("lobby_event", (event) => {
 });
 
 const game = new Game(
-    event => socket.emit("game_event", event));
+    event => socket.emit("game_action", event));
 
 socket.on("join_game", (state) => {
     game.setState(state);

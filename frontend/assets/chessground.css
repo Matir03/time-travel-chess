@@ -1,0 +1,8 @@
+#chessground {
+    width: 500px;
+    height: 500px;
+}
+
+cg-board {
+    background-color: #bfcfdd;
+}
