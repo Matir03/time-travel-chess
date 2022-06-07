@@ -41,11 +41,13 @@ socket.on("disconnect", (reason) => {
 });
 
 const lobby = new Lobby(pname, action => {
-    console.log(`Emitting action ${JSON.stringify(action)}`);
+    console.log(`Emitting lobby action ${JSON.stringify(action)}`);
     socket.emit("lobby_action", action);
 });
 
 socket.on("join_lobby", (state) => {
+    console.log(`Joining lobby with state
+        ${JSON.stringify(state)}`);
     lobby.setState(state);
     setView(lobby.view());
 });
@@ -54,14 +56,19 @@ socket.on("lobby_event", (event) => {
     setView(lobby.view());
 });
 
-const game = new Game(
-    event => socket.emit("game_action", event));
+const game = new Game(pname, action => {
+    console.log(`Emitting game action ${JSON.stringify(action)}`)
+    socket.emit("game_action", action);
+});
 
 socket.on("join_game", (state) => {
+    console.log(`Joining game with state
+        ${JSON.stringify(state)}`);
     game.setState(state);
     setView(game.view());
+    game.cgView();
 });
+
 socket.on("game_event", (event) => {
     game.update(event);
-    setView(game.view());
 });

@@ -1,3 +1,5 @@
+import { Color, Key } from "chessground/types";
+
 export type SeekColor = "White" | "Black" | "Random";
 export const colors: Array<SeekColor> = ["White", "Black", "Random"];
 
@@ -28,10 +30,6 @@ export class MappedLobbyState {
         this.seeks.delete(id);
     }
 
-    seeker(id: number) {
-        return this.seeks.get(id).player;
-    }
-
     toLobbyState(): LobbyState {
         return {
             seeks: Array.from(this.seeks,
@@ -39,10 +37,6 @@ export class MappedLobbyState {
             )
         }
     }
-}
-
-export interface GameState {
-
 }
 
 export interface LobbyAction {
@@ -58,7 +52,7 @@ export class MakeSeek implements LobbyAction {
     }
 }
 
-export class DeleteSeek {
+export class DeleteSeek implements LobbyAction {
     kind = "DeleteSeek";
     id: number;
 
@@ -67,7 +61,7 @@ export class DeleteSeek {
     }
 }
 
-export class AcceptSeek {
+export class AcceptSeek implements LobbyAction {
     kind = "AcceptSeek";
     id: number;
     
@@ -89,7 +83,7 @@ export class AddSeek implements LobbyEvent {
     }
 }
 
-export class RemoveSeek {
+export class RemoveSeek implements LobbyEvent {
     kind = "RemoveSeek";
     id: number;
 
@@ -98,8 +92,45 @@ export class RemoveSeek {
     }
 }
 
-export class GameEvent {
+export interface Move {
+    orig: Key;
+    dest: Key;
+}
 
+export interface GameState {
+    white: string;
+    black: string;
+
+    turnColor: 'white' | 'black';
+    fen: string;
+    moves: Move[];
+}
+
+export interface GameAction {
+    kind: string;
+}
+
+export class MakeMove implements GameAction {
+    kind = "MakeMove";
+    move: Move;
+
+    constructor(move: Move) {
+        this.move = move;
+    }
+}
+
+export interface GameEvent {
+    kind: string;
+}
+
+export class PerformMove implements GameEvent {
+    kind = "PerformMove";
+    move: Move;
+    color: Color;
+
+    constructor(move: Move) {
+        this.move = move;
+    }
 }
 
 export interface ServerToClientEvents {
@@ -112,5 +143,5 @@ export interface ServerToClientEvents {
 export interface ClientToServerEvents {
     player_join:  (pname:  string)      => void;
     lobby_action: (action: LobbyAction) => void;
-    game_action:  (action: GameEvent)   => void;
+    game_action:  (action: GameAction)  => void;
 }

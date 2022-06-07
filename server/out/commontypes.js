@@ -9,9 +9,6 @@ export class MappedLobbyState {
     remove(id) {
         this.seeks.delete(id);
     }
-    seeker(id) {
-        return this.seeks.get(id).player;
-    }
     toLobbyState() {
         return {
             seeks: Array.from(this.seeks, ([id, seek]) => seek)
@@ -48,5 +45,16 @@ export class RemoveSeek {
         this.id = id;
     }
 }
-export class GameEvent {
+export class MakeMove {
+    constructor(move) {
+        this.kind = "MakeMove";
+        this.move = move;
+    }
+}
+export class PerformMove {
+    constructor(move, color) {
+        this.kind = "PerformMove";
+        this.move = move;
+        this.color = color;
+    }
 }

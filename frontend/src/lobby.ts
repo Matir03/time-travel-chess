@@ -23,7 +23,7 @@ export class Lobby {
     }
 
     update(event: LobbyEvent) {
-        console.log(`Receiving event ${JSON.stringify(event)}`);
+        console.log(`Receiving lobby event ${JSON.stringify(event)}`);
         
         if(event.kind === "AddSeek") {
             
