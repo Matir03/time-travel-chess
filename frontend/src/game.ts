@@ -1,8 +1,19 @@
 import { Chessground } from 'chessground';
-import { GameState, GameEvent, GameAction, MakeMove, PerformMove } from './commontypes';
-import { h, toVNode, VNode } from 'snabbdom';
+import { GameState, GameEvent, GameAction, 
+    MakeMove, PerformMove, Move } from './commontypes';
+import { attributesModule, classModule, eventListenersModule, h, 
+    init, propsModule, styleModule, toVNode, VNode } from 'snabbdom';
 import { Api } from 'chessground/api';
 import { Color } from 'chessground/types';
+import { promote, PromotionCtrl } from './promotion';
+
+const patch = init([
+    attributesModule,
+    classModule,
+    propsModule,
+    styleModule,
+    eventListenersModule
+]);    
 
 export class Game {
 
@@ -13,9 +24,11 @@ export class Game {
     cg: Api;
     cgNode: HTMLElement;
 
+    prom: PromotionCtrl;
+    promNode: VNode;
+
     color: Color;
     other: Color;
-
 
     constructor(pname: string, 
         emit: (action: GameAction) => void) {
@@ -24,7 +37,39 @@ export class Game {
 
         this.cgNode = document.createElement('div');
         this.cgNode.id = "chessground";
-        this.cg = Chessground(this.cgNode);
+
+        this.cg = Chessground(this.cgNode, {
+            addDimensionsCssVars: true,
+            movable: {events: {
+                after: (orig, dest, meta) => {                    
+                    const move: Move = {orig: orig, dest: dest};
+
+                    if(!this.prom.start(orig, dest,
+                        (po, pd, pr) => {
+                            move.prom = pr;
+                            console.log(`Made move ${JSON.stringify(move)}`);
+                            this.emit(new MakeMove(move)); 
+                        }, meta)) {
+                        console.log(`Made move ${JSON.stringify(move)}`);
+                        this.emit(new MakeMove(move));                            
+                    }
+                }
+            }},
+        });
+        window['cg'] = this.cg;
+
+        this.promNode = toVNode(document.createElement('div'));
+
+        this.prom = new PromotionCtrl(
+            f => f(this.cg),
+            () => {},
+            () => {
+                this.cgNode.appendChild(this.promNode.elm);
+
+                this.promNode = patch(this.promNode,
+                    this.prom.view() || h('div'));
+            }
+        )
     }
 
     setState(state: GameState) {
@@ -41,13 +86,6 @@ export class Game {
             orientation: this.color,
             turnColor: state.turnColor,
             movable: {color: this.color},
-            events: {
-                move: (orig, dest) => {
-                    const move = {orig: orig, dest: dest};
-                    console.log(`Made move ${move}`);
-                    this.emit(new MakeMove(move));
-                }
-            }
         });
     }
 
@@ -61,21 +99,19 @@ export class Game {
 
             const move = (event as PerformMove).move;
 
+            this.cg.set({turnColor: this.color})
             this.cg.move(move.orig, move.dest);
-            this.cg.set({turnColor: this.color});
+            if(move.prom) {
+                promote(this.cg, move.dest, move.prom);
+            }
         }
     }
 
     view(): VNode {
-        return h('div', {
-            props: {id: 'cg-root'}
-        });
+        return h('div#root', {hook: {
+            postpatch: (old, vnode) => {
+                vnode.elm.appendChild(this.cgNode);
+            }
+        }});
     }
-
-    cgView() {
-        document
-            .getElementById('cg-root')
-            .appendChild(this.cgNode);
-    }
-
 }

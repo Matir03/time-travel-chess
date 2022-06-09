@@ -2,23 +2,28 @@ import { SOCKET_ADDR } from './config';
 import { Socket, io } from 'socket.io-client';
 import { Lobby } from './lobby';
 import { Game } from './game';
-import { classModule, eventListenersModule, h, init, 
+import { attributesModule, classModule, eventListenersModule, h, init, 
     propsModule, styleModule, toVNode, VNode } from 'snabbdom';
 import { ClientToServerEvents, ServerToClientEvents } from './commontypes';
 
 const patch = init([
+    attributesModule,
     classModule,
     propsModule,
     styleModule,
     eventListenersModule
-])
+]);
+window['h'] = h;
+window['patch'] = patch;
 
 let root = toVNode(document.getElementById("root"));
 const setView = (node: VNode) => root = patch(root, node);
 
 let pname = prompt("Enter a player name");
 
-setView(h('h1', `Connecting to server at ${SOCKET_ADDR}`));
+setView(h('div#root', [
+    h('h1', `Connecting to server at ${SOCKET_ADDR}`)
+]));
 
 const socket: Socket<ServerToClientEvents, ClientToServerEvents>
     = io('ws://' + SOCKET_ADDR);
@@ -60,13 +65,13 @@ const game = new Game(pname, action => {
     console.log(`Emitting game action ${JSON.stringify(action)}`)
     socket.emit("game_action", action);
 });
+window['game'] = game;
 
 socket.on("join_game", (state) => {
     console.log(`Joining game with state
         ${JSON.stringify(state)}`);
     game.setState(state);
     setView(game.view());
-    game.cgView();
 });
 
 socket.on("game_event", (event) => {

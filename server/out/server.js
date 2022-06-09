@@ -9,6 +9,7 @@ let maxPID = 0, maxGID = 0;
 const sockets = new Map();
 const lobby = new MappedLobbyState({ seeks: [] });
 const games = new Map();
+console.log(`Server running on port ${SOCKET_PORT}`);
 io.on("connection", (socket) => {
     console.log(`Socket ${socket.id} connected`);
     socket.on("player_join", (pname) => {
@@ -121,7 +122,8 @@ function gameActionHandler(socket) {
             const move = action.move;
             const color = socket.data.name === games.get(game).white ?
                 "white" : "black";
-            console.log(`Making move ${move} in ${game}`);
+            console.log(`Making move ${JSON.stringify(move)} 
+                in ${game}`);
             games.get(game).moves.push(move);
             io.to(game).emit("game_event", new PerformMove(move, color));
         }

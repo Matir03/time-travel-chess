@@ -1,8 +1,8 @@
 import { SOCKET_PORT } from './config.js';
 import { Server } from 'socket.io';
 import { AcceptSeek, AddSeek, DeleteSeek, GameAction, GameState, LobbyAction, 
-    MakeMove, 
-    MakeSeek, MappedLobbyState, PerformMove, RemoveSeek, Seek } from './commontypes.js';
+    MakeMove, MakeSeek, MappedLobbyState, PerformMove, 
+    RemoveSeek, Seek } from './commontypes.js';
 import { TTCServer, TTCSocket } from './servertypes.js';
 
 const io: TTCServer = new Server(SOCKET_PORT, {
@@ -14,6 +14,8 @@ let maxPID = 0, maxGID = 0;
 const sockets = new Map<string, TTCSocket>();
 const lobby = new MappedLobbyState({seeks: []});
 const games = new Map<string, GameState>();
+
+console.log(`Server running on port ${SOCKET_PORT}`);
 
 io.on("connection", (socket) => {
     console.log(`Socket ${socket.id} connected`);

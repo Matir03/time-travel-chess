@@ -41,7 +41,7 @@ export class Lobby {
     }
 
     view(): VNode {
-        return h('div', [
+        return h('div#root', [
             this.seekTable(),
             this.seekMaker()
         ]);
