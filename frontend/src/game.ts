@@ -1,10 +1,10 @@
-import { Chessground } from 'chessground';
+import Chessground from './chessground';
 import { GameState, GameEvent, GameAction, 
     MakeMove, PerformMove, Move } from './commontypes';
 import { attributesModule, classModule, eventListenersModule, h, 
     init, propsModule, styleModule, toVNode, VNode } from 'snabbdom';
-import { Api } from 'chessground/api';
-import { Color } from 'chessground/types';
+import { Api } from './chessground/api';
+import { Color } from './chessground/types';
 import { promote, PromotionCtrl } from './promotion';
 
 const patch = init([

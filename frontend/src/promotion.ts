@@ -1,8 +1,8 @@
 import { h, Hooks, VNode } from 'snabbdom';
-import { Api as CgApi } from 'chessground/api';
-import { DrawShape } from 'chessground/draw';
-import * as cgUtil from 'chessground/util';
-import * as cg from 'chessground/types';
+import { Api as CgApi } from './chessground/api';
+import { DrawShape } from './chessground/draw';
+import * as cgUtil from './chessground/util';
+import * as cg from './chessground/types';
 
 type Key = cg.Key;
 type Color = cg.Color;
