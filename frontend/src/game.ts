@@ -4,9 +4,9 @@ import { GameState, GameEvent, GameAction,
 import { attributesModule, classModule, eventListenersModule, h, 
     init, propsModule, styleModule, toVNode, VNode } from 'snabbdom';
 import { Api } from './chessground/api';
-import { Color, Key, Role } from './chessground/types';
+import { Color, Key, MoveMetadata, Role } from './chessground/types';
 import { promote, PromotionCtrl } from './promotion';
-import { opposite } from './chessground/util';
+import { opposite,  } from './chessground/util';
 
 const patch = init([
     attributesModule,
@@ -17,6 +17,12 @@ const patch = init([
 ]);    
 
 const PROMOTABLE_ROLES: Role[] = ['queen', 'knight', 'rook', 'bishop'];
+const NON_BISHOP_ROLES: Role[] = ['queen', 'knight', 'rook'];
+
+function sameColor(key1: Key, key2: Key): boolean {
+    const parity = key => key.charCodeAt(0) + key.charCodeAt(1);
+    return ((parity(key1) + parity(key2)) % 2) === 0;
+}
 
 function tap(cg: Api, orig: Key, dest: Key) {
     const piece = cg.state.pieces.get(dest);
@@ -64,53 +70,13 @@ export class Game {
 
         this.cg = Chessground(this.cgNode, {
             addDimensionsCssVars: true,
+
             movable: {events: {
-                after: (orig, dest, meta) => {                    
-                    const move: Move = {orig: orig, dest: dest};
-
-                    if(!this.prom.start(orig, dest, 
-                        PROMOTABLE_ROLES,
-                        (po, pd, pr) => {
-                            move.prom = pr;
-                            console.log(`Made move ${JSON.stringify(move)}`);
-                            this.emit(new MakeMove(move)); 
-                        }, meta)) {
-                        console.log(`Made move ${JSON.stringify(move)}`);
-                        this.emit(new MakeMove(move));                            
-                    }
-                }
+                after: (orig, dest, meta) =>
+                    this.afterMove(orig, dest, meta)
             }},
-            events: {select: key => {
-                if(this.cg.state.turnColor === this.other) return;
 
-                const piece = this.cg.state.pieces.get(key);
-                
-                if(piece) {
-                    if(this.selected) {
-                        if(!piece.tapped) {
-                            tap(this.cg, this.selected, key);
-                            
-                            emit(new MakeMove({
-                                orig: this.selected,
-                                dest: key,
-                            }));
-                        }
-                        this.cg.setAutoShapes([]);
-                        this.selected = null;
-                    }
-                } else {
-                    if(this.selected === key) {
-                        this.selected = null;
-                        this.cg.setAutoShapes([]);
-                    } else {
-                        this.selected = key;
-                        this.cg.setAutoShapes([{
-                            orig: key,
-                            brush: 'red'
-                        }]);
-                    }
-                }
-            }},
+            events: {select: key => this.onSelect(key)},
         });
 
         this.promNode = toVNode(document.createElement('div'));
@@ -125,6 +91,89 @@ export class Game {
                     this.prom.view() || h('div'));
             }
         )
+    }
+
+    afterMove(orig: Key, dest: Key, meta: MoveMetadata) {
+        const move: Move = {orig, dest};
+
+        const piece = this.cg.state.pieces.get(dest);
+        
+        if(piece?.role === 'pawn' && (
+            (dest[1] == '8' && 
+            this.cg.state.turnColor == 'black') || 
+            (dest[1] == '1' && 
+            this.cg.state.turnColor == 'white')
+        )) {
+            this.prom.start(orig, dest, 
+                PROMOTABLE_ROLES,
+                (po, pd, pr) => {
+                    move.prom = pr;
+                    this.emit(new MakeMove(move)); 
+                }, meta);
+        } else {
+            this.emit(new MakeMove(move));
+        }
+    }
+
+    onSelect(key: Key) {
+        if(this.cg.state.turnColor === this.other) return;
+
+        const piece = this.cg.state.pieces.get(key);
+        
+        if(piece) {
+            if(this.selected) {
+                if(!piece.tapped && 
+                    piece.color === this.color &&
+                    piece.role !== 'king' && (
+                    piece.role !== 'bishop' ||
+                    sameColor(this.selected, key)
+                )) {
+                    tap(this.cg, this.selected, key);
+                    
+                    const move: Move = {
+                        orig: this.selected,
+                        dest: key,
+                    }
+
+                    if(piece.role === 'pawn') {
+                        const maybeBishop: Role[] = 
+                            sameColor(this.selected, `${key[0]}${
+                                this.color === 'white' ?
+                                '8' : '1'}` as Key) ?
+                            ['bishop'] : [];
+
+                        const maybePawn: Role[] = 
+                            key[0] === this.selected[0] &&
+                            key[1]  <  this.selected[1] &&
+                            this.selected[1] < '8' ?
+                            ['pawn'] : [];
+
+                        this.prom.start('a0', this.selected,
+                            NON_BISHOP_ROLES.concat(maybeBishop, maybePawn),
+                            (po, pd, pr) => {
+                                move.prom = pr;
+                                this.emit(new MakeMove(move));
+                            }
+                        )
+                    } else {
+                        this.emit(new MakeMove(move)); 
+                    }                     
+                }
+                this.cg.setAutoShapes([]);
+                this.selected = null;
+            }
+        } else {
+            if(this.selected === key) {
+                this.selected = null;
+                this.cg.setAutoShapes([]);
+            } else {
+                this.selected = key;
+                this.cg.setAutoShapes([{
+                    orig: key,
+                    brush: 'red'
+                }]);
+            }
+        }
     }
 
     setState(state: GameState) {
@@ -163,6 +212,10 @@ export class Game {
                 this.cg.set({turnColor: this.color});
             } else {
                 tap(this.cg, move.orig, move.dest);
+
+                if(move.prom) {
+                    promote(this.cg, move.orig, move.prom);
+                }
             }
         }
     }

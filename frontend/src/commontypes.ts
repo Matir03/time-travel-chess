@@ -1,4 +1,4 @@
-import { Color, Key, Role } from "chessground/types";
+import { Color, Key, Role } from "./chessground/types";
 
 export type SeekColor = "White" | "Black" | "Random";
 export const colors: Array<SeekColor> = ["White", "Black", "Random"];

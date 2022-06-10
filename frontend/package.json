@@ -8,7 +8,6 @@
     "serve": "http-server"
   },
   "dependencies": {
-    "chessground": "^8.2.1",
     "common-js": "^0.3.8",
     "snabbdom": "^3.5.0",
     "socket.io": "^4.5.1",

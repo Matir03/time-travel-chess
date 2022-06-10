@@ -78,8 +78,6 @@ export function render(s: State): void {
         }
         // different piece: flag as moved unless it is a fading piece
         else {
-          console.log(`different: ${elPieceName}, ${pieceNameOf(pieceAtKey)}`);
-          
           if (fading && elPieceName === pieceNameOf(fading)) {
             el.classList.add('fading');
             el.cgFading = true;
