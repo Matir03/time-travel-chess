@@ -10,12 +10,14 @@ export interface Piece {
   color: Color;
   promoted?: boolean;
   tapped?: boolean;
+  blinking?: boolean;
 }
 export interface Drop {
   role: Role;
   key: Key;
 }
 export type Pieces = Map<Key, Piece>;
+export type Blinked = Map<Key, Piece[]>;
 export type PiecesDiff = Map<Key, Piece | undefined>;
 
 export type KeyPair = [Key, Key];

@@ -125,17 +125,37 @@ export function baseNewPiece(state: HeadlessState, piece: cg.Piece, key: cg.Key,
   return true;
 }
 
+export function getBlinks(state: HeadlessState) {
+  return [...state.pieces]
+    .filter(([k, p]) => p.blinking)
+    .map(([k, p]) => k);
+}
+
+export function endTurn(state: HeadlessState) {
+  const blinks = [...state.pieces].filter(([k, p]) => p.blinking);
+  blinks.forEach(([k, p]) => {
+    if(!state.blinked.has(k)) 
+      state.blinked.set(k, []);
+    state.blinked.get(k).push(p);
+  });
+  blinks.forEach(([k, p]) => state.pieces.delete(k));
+
+  state.turnColor = opposite(state.turnColor);
+}
+
 function baseUserMove(state: HeadlessState, orig: cg.Key, dest: cg.Key): cg.Piece | boolean {
   const result = baseMove(state, orig, dest);
   if (result) {
     state.movable.dests = undefined;
-    state.turnColor = opposite(state.turnColor);
+    endTurn(state);
     state.animation.current = undefined;
   }
   return result;
 }
 
 export function userMove(state: HeadlessState, orig: cg.Key, dest: cg.Key): boolean {
+  const blinks = getBlinks(state);
+  
   if (canMove(state, orig, dest)) {
     const result = baseUserMove(state, orig, dest);
     if (result) {
@@ -147,7 +167,7 @@ export function userMove(state: HeadlessState, orig: cg.Key, dest: cg.Key): bool
         holdTime,
       };
       if (result !== true) metadata.captured = result;
-      callUserFunction(state.movable.events.after, orig, dest, metadata);
+      callUserFunction(state.movable.events.after, orig, dest, blinks, metadata);
       return true;
     }
   } else if (canPremove(state, orig, dest)) {
@@ -272,6 +292,7 @@ export function isDraggable(state: HeadlessState, orig: cg.Key): boolean {
 
 export function playPremove(state: HeadlessState): boolean {
   const move = state.premovable.current;
+  const blinks: cg.Key[] = [];
   if (!move) return false;
   const orig = move[0],
     dest = move[1];
@@ -281,7 +302,7 @@ export function playPremove(state: HeadlessState): boolean {
     if (result) {
       const metadata: cg.MoveMetadata = { premove: true };
       if (result !== true) metadata.captured = result;
-      callUserFunction(state.movable.events.after, orig, dest, metadata);
+      callUserFunction(state.movable.events.after, orig, dest, blinks, metadata);
       success = true;
     }
   }

@@ -218,7 +218,8 @@ function posZIndex(pos: cg.Pos, asWhite: boolean): string {
 }
 
 function pieceNameOf(piece: cg.Piece): string {
-  return `${piece.tapped ? 'tapped ' : ''}${piece.color} ${piece.role}`;
+  return `${piece.tapped ? 'tapped ' : ''}${piece.blinking ?
+    'blinked ' : ''}${piece.color} ${piece.role}`;
 }
 
 function computeSquareClasses(s: State): SquareClasses {

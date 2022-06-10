@@ -75,6 +75,10 @@ piece.fading {
   opacity: 0.3;
 }
 
+.cg-wrap piece.blinked {
+  opacity: 0.3;
+}
+
 .cg-wrap piece svg {
   overflow: hidden;
   position: relative;

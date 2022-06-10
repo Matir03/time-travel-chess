@@ -50,6 +50,7 @@ export function promote(g: CgApi, key: Key, role: cg.Role): void {
             color: piece.color,
             role,
             tapped: piece.tapped,
+            blinking: piece.blinking,
             promoted: true,
           },
         ],

@@ -7,6 +7,7 @@ import { Api } from './chessground/api';
 import { Color, Key, MoveMetadata, Role } from './chessground/types';
 import { promote, PromotionCtrl } from './promotion';
 import { opposite,  } from './chessground/util';
+import { render } from './chessground/render';
 
 const patch = init([
     attributesModule,
@@ -34,14 +35,11 @@ function tap(cg: Api, orig: Key, dest: Key) {
         tapped: true,
         promoted: piece.promoted
     });
-    cg.setAutoShapes([]);
     cg.set({
         selected: null,
         lastMove: [orig, dest],
-        turnColor: opposite(cg.state.turnColor)
     });
-    cg.redrawAll();
-    
+    cg.setAutoShapes([]);
 }
 
 export class Game {
@@ -72,11 +70,13 @@ export class Game {
             addDimensionsCssVars: true,
 
             movable: {events: {
-                after: (orig, dest, meta) =>
-                    this.afterMove(orig, dest, meta)
+                after: (orig, dest, blinks, meta) =>
+                    this.afterMove(orig, dest, blinks, meta)
             }},
 
             events: {select: key => this.onSelect(key)},
+
+            draggable: {showGhost: false},
         });
 
         this.promNode = toVNode(document.createElement('div'));
@@ -93,8 +93,8 @@ export class Game {
         )
     }
 
-    afterMove(orig: Key, dest: Key, meta: MoveMetadata) {
-        const move: Move = {orig, dest};
+    afterMove(orig: Key, dest: Key, blinks: Key[], meta: MoveMetadata) {
+        const move: Move = {orig, dest, blinks};
 
         const piece = this.cg.state.pieces.get(dest);
         
@@ -123,17 +123,19 @@ export class Game {
         if(piece) {
             if(this.selected) {
                 if(!piece.tapped && 
+                   !piece.blinking &&
                     piece.color === this.color &&
                     piece.role !== 'king' && (
                     piece.role !== 'bishop' ||
                     sameColor(this.selected, key)
-                )) {
-                    tap(this.cg, this.selected, key);
-                    
+                )) {                    
                     const move: Move = {
                         orig: this.selected,
                         dest: key,
+                        blinks: this.cg.getBlinks()
                     }
+
+                    tap(this.cg, this.selected, key);     
 
                     if(piece.role === 'pawn') {
                         const maybeBishop: Role[] = 
@@ -148,15 +150,19 @@ export class Game {
                             this.selected[1] < '8' ?
                             ['pawn'] : [];
 
+                        this.cg.set({turnColor: this.other});
                         this.prom.start('a0', this.selected,
                             NON_BISHOP_ROLES.concat(maybeBishop, maybePawn),
                             (po, pd, pr) => {
-                                move.prom = pr;
+                                move.prom = pr;  
+                                this.cg.set({turnColor: this.color});
+                                this.cg.endTurn();                  
                                 this.emit(new MakeMove(move));
                             }
                         )
-                    } else {
+                    } else { 
                         this.emit(new MakeMove(move)); 
+                        this.cg.endTurn();   
                     }                     
                 }
                 this.cg.setAutoShapes([]);
@@ -202,14 +208,16 @@ export class Game {
 
             const move = (event as PerformMove).move;
             
+            move.blinks.forEach(key => 
+                this.cg.state.pieces.get(key).blinking = true
+            )
+
             if(this.cg.state.pieces.has(move.orig)) {
                 this.cg.move(move.orig, move.dest);
                 
                 if(move.prom) {
                     promote(this.cg, move.dest, move.prom);
                 }
-
-                this.cg.set({turnColor: this.color});
             } else {
                 tap(this.cg, move.orig, move.dest);
 
@@ -217,6 +225,8 @@ export class Game {
                     promote(this.cg, move.orig, move.prom);
                 }
             }
+
+            this.cg.endTurn();
         }
     }
 

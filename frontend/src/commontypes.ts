@@ -96,6 +96,7 @@ export interface Move {
     orig: Key;
     dest: Key;
     prom?: Role;
+    blinks: Key[];
 }
 
 export interface GameState {
@@ -129,8 +130,9 @@ export class PerformMove implements GameEvent {
     move: Move;
     color: Color;
 
-    constructor(move: Move) {
+    constructor(move: Move, color: Color) {
         this.move = move;
+        this.color = color;
     }
 }
 

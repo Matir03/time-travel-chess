@@ -7,6 +7,7 @@ import * as cg from './types';
 
 export interface HeadlessState {
   pieces: cg.Pieces;
+  blinked: cg.Blinked;
   orientation: cg.Color; // board orientation. white | black
   turnColor: cg.Color; // turn to play. white | black
   check?: cg.Key; // square currently in check "a2"
@@ -36,7 +37,7 @@ export interface HeadlessState {
     dests?: cg.Dests; // valid moves. {"a2" ["a3" "a4"] "b1" ["a3" "c3"]}
     showDests: boolean; // whether to add the move-dest class on squares
     events: {
-      after?: (orig: cg.Key, dest: cg.Key, metadata: cg.MoveMetadata) => void; // called after the move has been played
+      after?: (orig: cg.Key, dest: cg.Key, blinks: cg.Key[], metadata: cg.MoveMetadata) => void; // called after the move has been played
       afterNewPiece?: (role: cg.Role, key: cg.Key, metadata: cg.MoveMetadata) => void; // called after a new piece is dropped on the board
     };
     rookCastle: boolean; // castle by moving the king to the rook
@@ -107,6 +108,7 @@ export interface State extends HeadlessState {
 export function defaults(): HeadlessState {
   return {
     pieces: fen.read(fen.initial),
+    blinked: new Map(),
     orientation: 'white',
     turnColor: 'white',
     coordinates: true,

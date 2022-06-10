@@ -20,11 +20,16 @@ export interface Api {
   // e.g. rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR
   getFen(): cg.FEN;
 
+  getBlinks(): cg.Key[];
+
   // change the view angle
   toggleOrientation(): void;
 
   // perform a move programmatically
   move(orig: cg.Key, dest: cg.Key): void;
+
+  // end turn (including blinks)
+  endTurn(): void;
 
   // add and/or remove arbitrary pieces on the board
   setPieces(pieces: cg.PiecesDiff): void;
@@ -94,7 +99,11 @@ export function start(state: State, redrawAll: cg.Redraw): Api {
 
     getFen: () => fenWrite(state.pieces),
 
+    getBlinks: () => board.getBlinks(state), 
+
     toggleOrientation,
+
+    endTurn: () => board.endTurn(state),
 
     setPieces(pieces): void {
       anim(state => board.setPieces(state, pieces), state);
