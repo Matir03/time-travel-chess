@@ -4,8 +4,9 @@ import { GameState, GameEvent, GameAction,
 import { attributesModule, classModule, eventListenersModule, h, 
     init, propsModule, styleModule, toVNode, VNode } from 'snabbdom';
 import { Api } from './chessground/api';
-import { Color } from './chessground/types';
+import { Color, Key, Role } from './chessground/types';
 import { promote, PromotionCtrl } from './promotion';
+import { opposite } from './chessground/util';
 
 const patch = init([
     attributesModule,
@@ -14,6 +15,28 @@ const patch = init([
     styleModule,
     eventListenersModule
 ]);    
+
+const PROMOTABLE_ROLES: Role[] = ['queen', 'knight', 'rook', 'bishop'];
+
+function tap(cg: Api, orig: Key, dest: Key) {
+    const piece = cg.state.pieces.get(dest);
+    
+    cg.state.pieces.set(orig, piece);
+    cg.state.pieces.set(dest, {
+        color: piece.color,
+        role: piece.role,
+        tapped: true,
+        promoted: piece.promoted
+    });
+    cg.setAutoShapes([]);
+    cg.set({
+        selected: null,
+        lastMove: [orig, dest],
+        turnColor: opposite(cg.state.turnColor)
+    });
+    cg.redrawAll();
+    
+}
 
 export class Game {
 
@@ -27,6 +50,7 @@ export class Game {
     prom: PromotionCtrl;
     promNode: VNode;
 
+    selected: Key;
     color: Color;
     other: Color;
 
@@ -44,7 +68,8 @@ export class Game {
                 after: (orig, dest, meta) => {                    
                     const move: Move = {orig: orig, dest: dest};
 
-                    if(!this.prom.start(orig, dest,
+                    if(!this.prom.start(orig, dest, 
+                        PROMOTABLE_ROLES,
                         (po, pd, pr) => {
                             move.prom = pr;
                             console.log(`Made move ${JSON.stringify(move)}`);
@@ -55,8 +80,38 @@ export class Game {
                     }
                 }
             }},
+            events: {select: key => {
+                if(this.cg.state.turnColor === this.other) return;
+
+                const piece = this.cg.state.pieces.get(key);
+                
+                if(piece) {
+                    if(this.selected) {
+                        if(!piece.tapped) {
+                            tap(this.cg, this.selected, key);
+                            
+                            emit(new MakeMove({
+                                orig: this.selected,
+                                dest: key,
+                            }));
+                        }
+                        this.cg.setAutoShapes([]);
+                        this.selected = null;
+                    }
+                } else {
+                    if(this.selected === key) {
+                        this.selected = null;
+                        this.cg.setAutoShapes([]);
+                    } else {
+                        this.selected = key;
+                        this.cg.setAutoShapes([{
+                            orig: key,
+                            brush: 'red'
+                        }]);
+                    }
+                }
+            }},
         });
-        window['cg'] = this.cg;
 
         this.promNode = toVNode(document.createElement('div'));
 
@@ -78,8 +133,7 @@ export class Game {
         this.color = state.white === this.pname?
             "white" : "black";
 
-        this.other = this.color === "white" ?
-            "black" : "white";
+        this.other = opposite(this.color);
         
         this.cg.set({
             fen: state.fen,
@@ -98,11 +152,17 @@ export class Game {
             if(color === this.color) return;
 
             const move = (event as PerformMove).move;
+            
+            if(this.cg.state.pieces.has(move.orig)) {
+                this.cg.move(move.orig, move.dest);
+                
+                if(move.prom) {
+                    promote(this.cg, move.dest, move.prom);
+                }
 
-            this.cg.set({turnColor: this.color})
-            this.cg.move(move.orig, move.dest);
-            if(move.prom) {
-                promote(this.cg, move.dest, move.prom);
+                this.cg.set({turnColor: this.color});
+            } else {
+                tap(this.cg, move.orig, move.dest);
             }
         }
     }

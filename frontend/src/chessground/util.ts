@@ -56,7 +56,8 @@ export const posToTranslate =
     [((asWhite ? pos[0] : 7 - pos[0]) * bounds.width) / 8, ((asWhite ? 7 - pos[1] : pos[1]) * bounds.height) / 8];
 
 export const translate = (el: HTMLElement, pos: cg.NumberPair): void => {
-  el.style.transform = `translate(${pos[0]}px,${pos[1]}px)`;
+  // el.style.transform = `translate(${pos[0]}px,${pos[1]}px)`;
+  el.style.transform = `translate(${pos[0]}px,${pos[1]}px)${el.classList.contains('tapped') ? ' scaleY(-1)' : ''}`;
 };
 
 export const translateAndScale = (el: HTMLElement, pos: cg.NumberPair, scale = 1): void => {

@@ -34,11 +34,10 @@ export type Callback = (orig: Key, dest: Key, role: cg.Role) => void;
 interface Promoting {
   orig: Key;
   dest: Key;
+  roles: cg.Role[];
   pre: boolean;
   callback: Callback;
 }
-
-const PROMOTABLE_ROLES: cg.Role[] = ['queen', 'knight', 'rook', 'bishop'];
 
 export function promote(g: CgApi, key: Key, role: cg.Role): void {
   const piece = g.state.pieces.get(key);
@@ -50,6 +49,7 @@ export function promote(g: CgApi, key: Key, role: cg.Role): void {
           {
             color: piece.color,
             role,
+            tapped: piece.tapped,
             promoted: true,
           },
         ],
@@ -68,7 +68,8 @@ export class PromotionCtrl {
     private redraw: () => void,
   ) {}
 
-  start = (orig: Key, dest: Key, callback: Callback, meta?: cg.MoveMetadata, forceAutoQueen = false): boolean =>
+  start = (orig: Key, dest: Key, roles: cg.Role[], 
+    callback: Callback, meta?: cg.MoveMetadata, forceAutoQueen = false): boolean =>
     this.withGround(g => {
       const premovePiece = g.state.pieces.get(orig);
       const piece = premovePiece || g.state.pieces.get(dest);
@@ -77,7 +78,7 @@ export class PromotionCtrl {
         ((dest[1] == '8' && g.state.turnColor == 'black') || (dest[1] == '1' && g.state.turnColor == 'white'))
       ) {
         if (this.prePromotionRole && meta?.premove) {
-          this.doPromote({ orig, dest, callback }, this.prePromotionRole);
+          this.doPromote({ orig, dest, callback, roles }, this.prePromotionRole);
           return true;
         }
         if (
@@ -86,10 +87,10 @@ export class PromotionCtrl {
           forceAutoQueen
         ) {
           if (premovePiece) this.setPrePromotion(dest, 'queen');
-          else this.doPromote({ orig, dest, callback }, 'queen');
+          else this.doPromote({ orig, dest, callback, roles }, 'queen');
           return true;
         }
-        this.promoting = { orig, dest, pre: !!premovePiece, callback };
+        this.promoting = { orig, dest, roles, pre: !!premovePiece, callback };
         this.redraw();
         return true;
       }
@@ -120,7 +121,7 @@ export class PromotionCtrl {
       this.withGround(g =>
         this.renderPromotion(
           promoting.dest,
-          PROMOTABLE_ROLES,
+          promoting.roles,
           cgUtil.opposite(g.state.turnColor),
           g.state.orientation
         )

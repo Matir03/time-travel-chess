@@ -1,9 +1,9 @@
-import { State } from './state.js';
-import { key2pos, createEl, posToTranslate as posToTranslateFromBounds, translate } from './util.js';
-import { whitePov } from './board.js';
-import { AnimCurrent, AnimVectors, AnimVector, AnimFadings } from './anim.js';
-import { DragCurrent } from './drag.js';
-import * as cg from './types.js';
+import { State } from './state';
+import { key2pos, createEl, posToTranslate as posToTranslateFromBounds, translate } from './util';
+import { whitePov } from './board';
+import { AnimCurrent, AnimVectors, AnimVector, AnimFadings } from './anim';
+import { DragCurrent } from './drag';
+import * as cg from './types';
 
 type PieceName = string; // `$color $role`
 
@@ -78,6 +78,8 @@ export function render(s: State): void {
         }
         // different piece: flag as moved unless it is a fading piece
         else {
+          console.log(`different: ${elPieceName}, ${pieceNameOf(pieceAtKey)}`);
+          
           if (fading && elPieceName === pieceNameOf(fading)) {
             el.classList.add('fading');
             el.cgFading = true;
@@ -218,7 +220,7 @@ function posZIndex(pos: cg.Pos, asWhite: boolean): string {
 }
 
 function pieceNameOf(piece: cg.Piece): string {
-  return `${piece.color} ${piece.role}`;
+  return `${piece.tapped ? 'tapped ' : ''}${piece.color} ${piece.role}`;
 }
 
 function computeSquareClasses(s: State): SquareClasses {
