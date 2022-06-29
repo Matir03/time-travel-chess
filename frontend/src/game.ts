@@ -4,10 +4,10 @@ import { GameState, GameEvent, GameAction,
 import { attributesModule, classModule, eventListenersModule, h, 
     init, propsModule, styleModule, toVNode, VNode } from 'snabbdom';
 import { Api } from './chessground/api';
-import { Color, Key, MoveMetadata, Role } from './chessground/types';
-import { promote, PromotionCtrl } from './promotion';
+import { Color, Key, MoveMetadata, Role, Piece, BasicPiece } from './chessground/types';
+import { PieceSelector } from './promotion';
 import { opposite,  } from './chessground/util';
-import { render } from './chessground/render';
+import { unselect } from './chessground/board';
 
 const patch = init([
     attributesModule,
@@ -21,25 +21,54 @@ const PROMOTABLE_ROLES: Role[] = ['queen', 'knight', 'rook', 'bishop'];
 const NON_BISHOP_ROLES: Role[] = ['queen', 'knight', 'rook'];
 
 function sameColor(key1: Key, key2: Key): boolean {
-    const parity = key => key.charCodeAt(0) + key.charCodeAt(1);
+    const parity = (key: Key) => key.charCodeAt(0) + key.charCodeAt(1);
     return ((parity(key1) + parity(key2)) % 2) === 0;
 }
 
-function tap(cg: Api, orig: Key, dest: Key) {
+function promote(cg: Api, key: Key, role: Role): void {
+    cg.state.pieces.get(key).role = role;
+}
+
+function tap(cg: Api, orig: Key, dest: Key, role?: Role) {
     const piece = cg.state.pieces.get(dest);
     
-    cg.state.pieces.set(orig, piece);
+    if(role) {
+        cg.state.pieces.set(orig, {
+            color: piece.color, role
+        });
+    } else {
+        cg.state.pieces.set(orig, piece);
+    }
+
     cg.state.pieces.set(dest, {
         color: piece.color,
         role: piece.role,
-        tapped: true,
-        promoted: piece.promoted
+        tapped: orig,
     });
+    
     cg.set({
         selected: null,
         lastMove: [orig, dest],
     });
+
     cg.setAutoShapes([]);
+    cg.endTurn();
+}
+
+function unblink(cg: Api, key: Key, piece: Piece) {
+    const atk: Map<BasicPiece, number> = cg.state.blinked.get(key);
+    const c = atk.get(piece);
+    atk.set(piece, c - 1);
+
+    cg.state.pieces.set(key, piece);
+
+    cg.set({
+        selected: null,
+        lastMove: [key],
+    });
+
+    cg.setAutoShapes([]);
+    cg.endTurn();
 }
 
 export class Game {
@@ -51,12 +80,14 @@ export class Game {
     cg: Api;
     cgNode: HTMLElement;
 
-    prom: PromotionCtrl;
-    promNode: VNode;
+    sel: PieceSelector;
+    selNode: VNode;
 
     selected: Key;
     color: Color;
     other: Color;
+
+    oldLastMove: Key[];
 
     constructor(pname: string, 
         emit: (action: GameAction) => void) {
@@ -74,21 +105,47 @@ export class Game {
                     this.afterMove(orig, dest, blinks, meta)
             }},
 
+            blinkable: {
+                unblinker: (key) => {
+                    const roles = [...new Set(this.cg.state.blinked.get(key))]
+                        .filter(([p, n]) => n > 0 && 
+                            p.color === this.color)
+                        .map(([p, n]) => p.role);
+
+                    if(roles.length === 0) return null;
+                    
+                    this.sel.start(key, roles, this.color,
+                        sr => {
+                            this.emit(new MakeMove({
+                                orig: 'a0',
+                                dest: key,
+                                sel: sr,
+                                blinks: this.cg.getBlinks()
+                            }));
+
+                            unblink(this.cg, key, {
+                                role: sr,
+                                color: this.color
+                            });
+                        },
+                    );
+                }
+            },
+
             events: {select: key => this.onSelect(key)},
 
             draggable: {showGhost: false},
         });
 
-        this.promNode = toVNode(document.createElement('div'));
+        this.selNode = toVNode(document.createElement('div'));
 
-        this.prom = new PromotionCtrl(
+        this.sel = new PieceSelector(
             f => f(this.cg),
-            () => {},
             () => {
-                this.cgNode.appendChild(this.promNode.elm);
+                this.cgNode.appendChild(this.selNode.elm);
 
-                this.promNode = patch(this.promNode,
-                    this.prom.view() || h('div'));
+                this.selNode = patch(this.selNode,
+                    this.sel.view() || h('div'));
             }
         )
     }
@@ -98,20 +155,38 @@ export class Game {
 
         const piece = this.cg.state.pieces.get(dest);
         
-        if(piece?.role === 'pawn' && (
+        if(piece.role === 'pawn' && (
             (dest[1] == '8' && 
-            this.cg.state.turnColor == 'black') || 
+            this.color === 'white') || 
             (dest[1] == '1' && 
-            this.cg.state.turnColor == 'white')
+            this.color == 'black')
         )) {
-            this.prom.start(orig, dest, 
+            this.sel.start(dest, 
                 PROMOTABLE_ROLES,
-                (po, pd, pr) => {
-                    move.prom = pr;
+                this.color,
+                sr => {
+                    move.sel = sr;
                     this.emit(new MakeMove(move)); 
-                }, meta);
+                    promote(this.cg, dest, sr);
+                    this.cg.endTurn();
+                },
+                () => {
+                    this.cg.state.pieces.set(orig, piece);
+
+                    if(meta.captured) {
+                        this.cg.state.pieces.set(dest, meta.captured);
+                    } else {
+                        this.cg.state.pieces.delete(dest);
+                    }
+
+                    this.cg.state.lastMove = this.oldLastMove;
+
+                    this.cg.redrawAll();
+                }
+            );
         } else {
             this.emit(new MakeMove(move));
+            this.cg.endTurn();
         }
     }
 
@@ -135,8 +210,6 @@ export class Game {
                         blinks: this.cg.getBlinks()
                     }
 
-                    tap(this.cg, this.selected, key);     
-
                     if(piece.role === 'pawn') {
                         const maybeBishop: Role[] = 
                             sameColor(this.selected, `${key[0]}${
@@ -150,19 +223,24 @@ export class Game {
                             this.selected[1] < '8' ?
                             ['pawn'] : [];
 
-                        this.cg.set({turnColor: this.other});
-                        this.prom.start('a0', this.selected,
+                        const orig = this.selected;
+
+                        this.sel.start(this.selected,
                             NON_BISHOP_ROLES.concat(maybeBishop, maybePawn),
-                            (po, pd, pr) => {
-                                move.prom = pr;  
-                                this.cg.set({turnColor: this.color});
-                                this.cg.endTurn();                  
+                            this.color,
+                            sr => { 
+                                move.sel = sr;  
                                 this.emit(new MakeMove(move));
+                                tap(this.cg, orig, key, sr);  
+                            },
+                            () => {
+                                unselect(this.cg.state);
+                                this.cg.redrawAll();
                             }
                         )
                     } else { 
                         this.emit(new MakeMove(move)); 
-                        this.cg.endTurn();   
+                        tap(this.cg, this.selected, key);   
                     }                     
                 }
                 this.cg.setAutoShapes([]);
@@ -207,26 +285,29 @@ export class Game {
             if(color === this.color) return;
 
             const move = (event as PerformMove).move;
+
+            this.oldLastMove = [move.orig, move.dest]
             
             move.blinks.forEach(key => 
                 this.cg.state.pieces.get(key).blinking = true
             )
 
-            if(this.cg.state.pieces.has(move.orig)) {
+            if(move.orig === 'a0') {
+                unblink(this.cg, move.dest, {
+                    role: move.sel,
+                    color: this.other
+                });
+            } else if(this.cg.state.pieces.has(move.orig)) {
                 this.cg.move(move.orig, move.dest);
                 
-                if(move.prom) {
-                    promote(this.cg, move.dest, move.prom);
+                if(move.sel) {
+                    promote(this.cg, move.dest, move.sel);
                 }
+
+                this.cg.endTurn();
             } else {
-                tap(this.cg, move.orig, move.dest);
-
-                if(move.prom) {
-                    promote(this.cg, move.orig, move.prom);
-                }
+                tap(this.cg, move.orig, move.dest, move.sel);
             }
-
-            this.cg.endTurn();
         }
     }
 

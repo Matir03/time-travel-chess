@@ -103,7 +103,10 @@ export function start(state: State, redrawAll: cg.Redraw): Api {
 
     toggleOrientation,
 
-    endTurn: () => board.endTurn(state),
+    endTurn: () => {
+      board.endTurn(state);
+      redrawAll()
+    },
 
     setPieces(pieces): void {
       anim(state => board.setPieces(state, pieces), state);

@@ -133,10 +133,19 @@ export function getBlinks(state: HeadlessState) {
 
 export function endTurn(state: HeadlessState) {
   const blinks = [...state.pieces].filter(([k, p]) => p.blinking);
-  blinks.forEach(([k, p]) => {
-    if(!state.blinked.has(k)) 
-      state.blinked.set(k, []);
-    state.blinked.get(k).push(p);
+  blinks.forEach(([key, piece]) => {
+    const p: cg.BasicPiece = {
+      role: piece.role,
+      color: piece.color,
+    }
+
+    if(!state.blinked.has(key)) 
+      state.blinked.set(key, new Map());
+    
+    const atk = state.blinked.get(key);
+    const c = atk.has(p) ? atk.get(p) : 0;
+    
+    atk.set(p, c + 1);
   });
   blinks.forEach(([k, p]) => state.pieces.delete(k));
 
@@ -147,7 +156,6 @@ function baseUserMove(state: HeadlessState, orig: cg.Key, dest: cg.Key): cg.Piec
   const result = baseMove(state, orig, dest);
   if (result) {
     state.movable.dests = undefined;
-    endTurn(state);
     state.animation.current = undefined;
   }
   return result;

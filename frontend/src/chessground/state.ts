@@ -42,6 +42,9 @@ export interface HeadlessState {
     };
     rookCastle: boolean; // castle by moving the king to the rook
   };
+  blinkable?: {
+    unblinker: cg.Unblinker
+  };
   premovable: {
     enabled: boolean; // allow premoves for color that can not move
     showDests: boolean; // whether to add the premove-dest class on squares
@@ -134,6 +137,9 @@ export function defaults(): HeadlessState {
       showDests: true,
       events: {},
       rookCastle: true,
+    },
+    blinkable: {
+      unblinker: () => null
     },
     premovable: {
       enabled: true,

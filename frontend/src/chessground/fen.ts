@@ -38,7 +38,6 @@ export function read(fen: cg.FEN): cg.Pieces {
         break;
       case '~': {
         const piece = pieces.get(pos2key([col - 1, row]));
-        if (piece) piece.promoted = true;
         break;
       }
       default: {
@@ -67,7 +66,6 @@ export function write(pieces: cg.Pieces): cg.FEN {
           if (piece) {
             let p = letters[piece.role];
             if (piece.color === 'white') p = p.toUpperCase();
-            if (piece.promoted) p += '~';
             return p;
           } else return '1';
         })

@@ -7,14 +7,21 @@ export function blink(s: State, e: Event) {
     e.stopPropagation();
     e.preventDefault();
     unselect(s);
+
+    if(s.turnColor !== s.movable.color) return;
     
     const pos = eventPosition(e)!,
-        orig = getKeyAtDomPos(pos, whitePov(s), s.dom.bounds()),
-        piece = s.pieces.get(orig);
+        key = getKeyAtDomPos(pos, whitePov(s), s.dom.bounds()),
+        piece = s.pieces.get(key);
 
-    if(!piece) return;
+    if(!piece) {
+        s.blinkable.unblinker(key);
+        
+        return;
+    }
 
-    if(piece.color !== s.turnColor) return;
+    if( piece.color !== s.turnColor ||
+        piece.role === 'king') return;
 
     piece.blinking = !piece.blinking;
 

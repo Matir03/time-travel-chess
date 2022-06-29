@@ -29,95 +29,49 @@ function bind(eventName: string, f: (e: Event) => any,
     );
 }
 
-export type Callback = (orig: Key, dest: Key, role: cg.Role) => void;
+export type Callback = (role: cg.Role) => void;
 
-interface Promoting {
-  orig: Key;
-  dest: Key;
+interface Selecting {
+  dest: Key
   roles: cg.Role[];
-  pre: boolean;
+  color: cg.Color;
   callback: Callback;
+  onCancel: () => void;
 }
 
-export function promote(g: CgApi, key: Key, role: cg.Role): void {
-  const piece = g.state.pieces.get(key);
-  if (piece && piece.role == 'pawn') {
-    g.setPieces(
-      new Map([
-        [
-          key,
-          {
-            color: piece.color,
-            role,
-            tapped: piece.tapped,
-            blinking: piece.blinking,
-            promoted: true,
-          },
-        ],
-      ])
-    );
-  }
-}
-
-export class PromotionCtrl {
-  private promoting?: Promoting;
-  private prePromotionRole?: cg.Role;
+export class PieceSelector {
+  private selecting?: Selecting;
 
   constructor(
     private withGround: <A>(f: (cg: CgApi) => A) => A,
-    private onCancel: () => void,
     private redraw: () => void,
   ) {}
 
-  start = (orig: Key, dest: Key, roles: cg.Role[], 
-    callback: Callback, meta?: cg.MoveMetadata, forceAutoQueen = false): boolean =>
+  start = (dest: Key, roles: cg.Role[], color: cg.Color, callback: Callback, 
+      onCancel: () => void = () => {}) : boolean =>
     this.withGround(g => {
-      const premovePiece = g.state.pieces.get(orig);
-      const piece = premovePiece || g.state.pieces.get(dest);
-        if (this.prePromotionRole && meta?.premove) {
-          this.doPromote({ orig, dest, callback, roles }, this.prePromotionRole);
-          return true;
-        }
-        if (
-          !meta?.ctrlKey &&
-          !this.promoting &&
-          forceAutoQueen
-        ) {
-          if (premovePiece) this.setPrePromotion(dest, 'queen');
-          else this.doPromote({ orig, dest, callback, roles }, 'queen');
-          return true;
-        }
-        this.promoting = { orig, dest, roles, pre: !!premovePiece, callback };
+        this.selecting = { dest, roles, color, callback, onCancel };
         this.redraw();
         return true;
      }) || false;
 
   cancel = (): void => {
-    this.cancelPrePromotion();
-    if (this.promoting) {
-      this.promoting = undefined;
-      this.onCancel();
-      this.redraw();
-    }
-  };
-
-  cancelPrePromotion = (): void => {
-    if (this.prePromotionRole) {
-      this.withGround(g => g.setAutoShapes([]));
-      this.prePromotionRole = undefined;
+    if (this.selecting) {
+      this.selecting.onCancel();
+      this.selecting = undefined;
       this.redraw();
     }
   };
 
   view = (): VNode => {
-    const promoting = this.promoting;
-    if (!promoting) return;
+    const selecting = this.selecting;
+    if (!selecting) return;
     return (
       this.withGround(g =>
-        this.renderPromotion(
-          promoting.dest,
-          promoting.roles,
-          cgUtil.opposite(g.state.turnColor),
+        this.renderSelection(
+          selecting.dest,
+          selecting.roles,
+          selecting.color,
           g.state.orientation
         )
       )
@@ -125,38 +79,15 @@ export class PromotionCtrl {
   };
 
   private finish(role: cg.Role): void {
-    const promoting = this.promoting;
-    if (promoting) {
-      this.promoting = undefined;
-      if (promoting.pre) this.setPrePromotion(promoting.dest, role);
-      else this.doPromote(promoting, role);
+    const selecting = this.selecting;
+    if (selecting) {
+      this.selecting = undefined;
+      selecting.callback(role);
       this.redraw();
     }
   }
 
-  private doPromote(promoting: Omit<Promoting, 'pre'>, role: cg.Role): void {
-    this.withGround(g => promote(g, promoting.dest, role));
-    promoting.callback(promoting.orig, promoting.dest, role);
-  }
-
-  private setPrePromotion(dest: cg.Key, role: cg.Role): void {
-    this.prePromotionRole = role;
-    this.withGround(g =>
-      g.setAutoShapes([
-        {
-          orig: dest,
-          piece: {
-            color: cgUtil.opposite(g.state.turnColor),
-            role,
-            opacity: 0.8,
-          },
-          brush: '',
-        } as DrawShape,
-      ])
-    );
-  }
-
-  private renderPromotion(dest: Key, pieces: cg.Role[], 
+  private renderSelection(dest: Key, pieces: cg.Role[], 
     color: Color, orientation: Color): VNode {
     let left = (7 - cgUtil.key2pos(dest)[0]) * 12.5;
     if (orientation === 'white') left = 87.5 - left;
