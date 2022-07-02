@@ -9,4 +9,4 @@
       "module": "esnext",
       "lib": ["ES2018", "DOM"]
     }
-  }
+}

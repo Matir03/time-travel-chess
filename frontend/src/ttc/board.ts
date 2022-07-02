@@ -1,0 +1,576 @@
+import * as ttc from './types';
+
+export const startingFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - - 0 1";
+
+export function inBounds(key: ttc.Key) {
+    return key && key.every(k => k >= 1 && k <= 8);
+}
+
+export function opposite(color: ttc.Color): ttc.Color { 
+    return color === 'black' ? 'white' : 'black';
+}
+
+function incrementBlinks(blinks: ttc.Blinks, piece: ttc.Piece) {
+    const pname = pieceToChar(piece); 
+
+    const k = blinks.get(pname) ?? 0;
+
+    blinks.set(pname, k + 1);       
+}
+
+function pieceToChar(piece: ttc.Piece): string {
+    return String.fromCharCode(
+        ttc.role2sym[piece.role].charCodeAt(0) + 
+        (piece.color === 'white' ? 0 : 
+        ('a'.charCodeAt(0) - 'A'.charCodeAt(0))));
+}
+
+function charToPiece(c : string): ttc.Piece {
+    const C = c.toUpperCase();
+    
+    return {
+        color: c === C ? 'white' : 'black',
+        role: ttc.sym2role[C]
+    }
+}
+
+function toKey(sq: string): ttc.Key {
+    return [sq.charCodeAt(0) - 'a'.charCodeAt(0) + 1,
+        sq.charCodeAt(1) - '0'.charCodeAt(0)];
+}
+
+function toCoord(key: ttc.Key): string {
+    return `${String.fromCharCode(
+        'a'.charCodeAt(0) + key[0] - 1)}${
+            String.fromCharCode(
+        '0'.charCodeAt(0) + key[1])}`
+}
+
+export class Board {
+    
+    squares: Map<string, ttc.Square>;
+    turn: ttc.Color;
+    castling: ttc.Castling;
+    enpassant: number;
+    killer?: ttc.Color;
+    halfmoves: number;
+    fullmoves: number;
+
+    static fromFEN(fen: string = startingFEN): Board {
+        const board = new Board();
+
+        const records = fen.split(' ');
+
+        board.squares = new Map();
+
+        for(let x = 1; x <= 8; x++) 
+            for(let y = 1; y <= 8; y++) 
+                board.squares.set(toCoord([x, y]), {blinks: new Map()});
+
+        const ranks = records[0].split('/');
+
+        for(let y = 8; y >= 1; y--) {
+            const rank = ranks[8-y];
+
+            let x = 0;
+            let tapped = '';
+            let tap = false, blink = false;
+
+            for(const c of rank) {
+
+                if(c === '(') {
+                    tap = true;
+                    continue;
+                }
+
+                if(c === ')') {
+                    const piece = board.squares.get(toCoord([x, y])).piece;
+
+                    piece.tapped =
+                        tapped.length === 3 ? 
+                        {
+                            role: ttc.sym2role[tapped[0]],
+                            target: toKey(tapped.slice(1))
+                        } :
+                        {
+                            role: piece.role,
+                            target: toKey(tapped)
+                        }
+
+                    tap = false;
+                    tapped = '';
+
+                    continue;
+                }
+
+                if(c === '[') {
+                    blink = true;
+                    continue;
+                }
+
+                if(c === ']') {
+                    blink = false;
+                    continue;
+                }
+                
+                if(tap) {
+                    tapped += c;
+                    continue;
+                }
+
+                const C = c.toUpperCase();
+
+                if((ttc.syms as readonly string[]).includes(C)) {
+                    const piece = charToPiece(c);
+
+                    if(blink) {
+                        incrementBlinks(board.squares.get(toCoord([x, y])).blinks,
+                            piece)
+                    } else {
+                        x += 1;
+                        board.squares.get(toCoord([x, y])).piece = piece;
+                    }
+
+                    continue;
+                }
+
+                const n = c.charCodeAt(0) - '0'.charCodeAt(0);
+
+                if(1 <= n && n <= 8) {
+                    x += n;
+                    continue;
+                }
+            }
+        }
+
+        board.turn = records[1] === 'w' ? 'white' : 'black';
+
+        board.castling = {
+            short: {
+                white: records[2].includes('K'),
+                black: records[2].includes('k')
+            }, 
+            long: {
+                white: records[2].includes('Q'),
+                black: records[2].includes('q')
+            }
+        }
+
+        board.enpassant = records[3] === '-' ?
+            0 : records[3].charCodeAt(0) - 'a'.charCodeAt(0) + 1;
+
+        if(records[4] !== '-') 
+            board.killer = records[4] === 'w' ?
+                'white' : 'black';
+        
+        board.halfmoves = parseInt(records[5]);
+
+        board.fullmoves = parseInt(records[6]);
+
+        return board;
+    }
+
+    toFEN(): string {        
+        return [
+            [8, 7, 6, 5, 4, 3, 2, 1].map(y => {
+                let rank = '';
+                let nulls = 0;
+
+                for(let x = 1; x <= 8; x++) {
+                    let entry = '';
+
+                    const square = this.squares.get(toCoord([x, y]));
+                    const piece = square.piece;
+
+                    if(piece) {
+                        entry += pieceToChar(piece);
+
+                        if(piece.tapped)
+                            entry += `(${
+                                piece.role === piece.tapped.role ? '' : 
+                                pieceToChar({
+                                role: piece.tapped.role,
+                                color: piece.color
+                            })}${toCoord(piece.tapped.target)})`
+                    }
+
+                    const blinkstr = 'PNBRQpnbrq'
+                        .split('')
+                        .map(c => c.repeat(
+                            square.blinks.get(c)))
+                        .join('');
+
+                    if(blinkstr) entry += `[${blinkstr}]`;
+
+                    if(entry) {
+                        if(nulls) rank += String.fromCharCode(nulls + 
+                            '0'.charCodeAt(0));
+
+                        nulls = 0;
+
+                        rank += entry;
+                    } else {
+                        nulls += 1;
+                    }
+                }
+
+                if(nulls) rank += String.fromCharCode(nulls + 
+                    '0'.charCodeAt(0));
+
+                return rank;
+            }).join('/'),
+            this.turn.charAt(0),
+            [
+                this.castling.short.white ? 'K' : '',
+                this.castling.long.white  ? 'Q' : '',
+                this.castling.short.black ? 'k' : '',
+                this.castling.long.black  ? 'q' : '',
+            ].join('') || '-',
+            this.enpassant ? toCoord([this.enpassant, 
+                this.turn === 'white' ? 6 : 3]) : '-',
+            this.killer?.charAt(0) || '-',
+            this.halfmoves,
+            this.fullmoves,
+        ].join(' ');
+    }
+
+    copy(): Board {
+        const board = new Board();
+
+        board.turn = this.turn;
+        board.squares = this.squares;
+        board.castling = this.castling;
+        board.enpassant = this.enpassant;
+
+        return board;
+    }
+
+    isEmpty(key: ttc.Key): boolean {
+        return inBounds(key) &&
+            !this.squares.get(toCoord(key)).piece;
+    }
+
+    basicDestsOf(orig: ttc.Key): ttc.Key[] {
+        const [x0, y0] = orig;
+        const piece = this.squares.get(toCoord(orig)).piece;
+
+        if(!piece || piece.color !== this.turn) 
+            return [];
+
+        let dests: ttc.Key[] = [];
+
+        const farscan = (dx: number, dy: number) => {
+            const gen: (prev: ttc.Key) => ttc.Key 
+                = ([x, y]) => [x + dx, y + dy];
+
+            for(let dest = gen(orig); inBounds(dest); dest = gen(dest)) {
+                const piece = this.squares.get(toCoord(dest)).piece;
+                
+                if(piece) {
+                    if(piece.color !== this.turn) 
+                        dests.push(dest);
+
+                    return;
+                }
+
+                dests.push(dest);
+            }
+        }
+
+        const nearscan = (deltas: [number, number][]) => {
+            deltas.forEach(([dx, dy]) => {
+                const dest: ttc.Key = [x0 + dx, y0 + dy];
+                
+                if(!inBounds(dest)) return;
+                
+                const piece = this.squares.get(toCoord(dest)).piece;
+
+                if(!piece || piece.color !== this.turn) 
+                    dests.push(dest);
+            });
+        }
+
+        if(piece.role === 'king') {
+            nearscan([     
+                [-1, -1], [0, -1], [1, -1],
+                [-1,  0],          [1,  0],
+                [-1,  1], [0,  1], [1,  1],
+            ]);
+
+            if(this.castling.short[this.turn] &&
+                [[6, y0], [7, y0]].every(
+                    (key: ttc.Key) => this.isEmpty(key)))
+            dests.push([7, y0]);
+            
+            if(this.castling.long[this.turn] &&
+                [[2, y0], [3, y0], [4, y0]].every(
+                    (key: ttc.Key) => this.isEmpty(key)))
+            dests.push([3, y0]);
+        }
+
+        if(['queen', 'rook'].includes(piece.role)) {
+            farscan(1, 0);
+            farscan(-1, 0);
+            farscan(0, 1);
+            farscan(0, -1);
+        }
+
+        if(['queen', 'bishop'].includes(piece.role)) {
+            farscan(1, 1);
+            farscan(1, -1);
+            farscan(-1, 1);
+            farscan(-1, -1);
+        }
+
+        if(piece.role === 'knight') {
+            nearscan([
+                [-2, -1], [-2, 1],
+                [-1, -2], [-1, 2],
+                [ 1, -2], [ 1, 2],
+                [ 2, -1], [ 2, 1],
+            ]);
+        }
+
+        if(piece.role === 'pawn') {
+            const dir = piece.color === 'white' ?
+                1 : -1;
+
+            if(this.isEmpty([x0, y0 + dir]) && 
+               (!piece.tapped || 
+                (piece.tapped.target[1] - y0) * dir >= 1)) {
+                dests.push([x0, y0 + dir]);
+
+                if((dir === -1 && y0 === 7) || 
+                    (dir === 1 && y0 === 2)) {
+                    if(this.isEmpty([x0, y0 + 2 * dir]) &&
+                       (!piece.tapped || 
+                        (piece.tapped.target[1] - y0) * dir >= 2)) 
+                        dests.push([x0, y0 + 2 * dir]);
+                } 
+            }
+
+            const capscan = (target: ttc.Key) => {
+                if(!this.isEmpty(target) || 
+                    this.enpassant === target[0])
+                    nearscan([target]);
+            }
+
+            capscan([x0 - 1, y0 + dir]);
+            capscan([x0 + 1, y0 + dir]);
+        }
+
+        return dests;
+    }
+
+    canMakeMove(move: ttc.Move): boolean {
+        if(!move.blinks.every(sq => {
+            if(!inBounds(sq)) return false;
+
+            if(sq[0] === move.dest[0] &&
+               sq[1] === move.dest[1])
+                sq = move.orig;
+
+            const blink = this.squares.get(toCoord(sq)).piece;
+
+            return blink && blink.color === this.turn 
+                && blink.role !== 'king' && 
+                (!blink.tapped || 
+                    (blink.tapped.target === sq &&
+                        blink.tapped.role === blink.role))
+            }))
+            return false;
+
+        if(!inBounds(move.orig)) return false;
+
+        const piece = this.squares.get(toCoord(move.orig)).piece;
+
+        if(piece) {
+            return this.basicDestsOf(move.orig).some(dest =>
+                    dest[0] === move.dest[0] &&
+                    dest[1] === move.dest[1]) &&
+                (!move.target || 
+                    (piece.role === 'pawn' &&
+                    ['queen', 'rook', 'bishop', 'knight']
+                        .includes(move.target) &&
+                    move.dest[1] === 
+                        (piece.color  === 'white' ? 1 : 8)));
+        }
+
+        if(move.dest) {
+            if(!inBounds(move.dest)) return false;
+
+            const piece = this.squares.get(toCoord(move.dest)).piece;
+
+            return piece?.color === this.turn &&
+                piece.role !== 'king' &&
+                !piece.tapped && 
+                (!move.target || 
+                 (piece.role === 'pawn' &&
+                  (['queen', 'rook', 'knight'].includes(move.target) ||
+                   (move.target === 'pawn' && 
+                    move.orig[0] === move.dest[0] &&
+                    ((this.turn === 'white' && 
+                      move.orig[1] > move.dest[1]) ||
+                     (this.turn === 'black' &&
+                      move.orig[1] < move.dest[1]))
+                   ) ||
+                   (move.target === 'bishop' && 
+                    (move.orig[0] + move.orig[1] + move.dest[0]) % 2
+                      === (this.turn === 'white' ? 0 : 1)
+                   )
+                  ) 
+                 )
+                );                        
+        }
+
+        return !!this.squares.get(toCoord(move.orig)).blinks.get(
+            pieceToChar({role: move.target, color: this.turn}));
+    }
+
+    makeMove(move: ttc.Move): boolean {
+        if(!this.canMakeMove(move))
+            return false;
+
+        const piece = this.squares.get(toCoord(move.orig)).piece;
+        const basicTarget: ttc.Piece = {
+            role: move.target ?? 'king',
+            color: this.turn
+        };
+        const targetName = pieceToChar(basicTarget);
+
+        const r = this.turn === 'white' ? 1 : 8;
+
+        if(piece) {
+            const cap = this.squares.get(toCoord(move.dest)).piece;
+
+            if(piece.role === 'pawn' || cap) {
+                this.halfmoves = 0;
+            } else {
+                this.halfmoves++;
+            }
+
+            if(cap?.role === 'king')
+                this.killer ??= this.turn;
+
+            this.squares.get(toCoord(move.orig)).piece = null;
+
+            this.squares.get(toCoord(move.dest)).piece = 
+                move.target ? basicTarget : piece;
+
+            if(piece.role === 'pawn' &&
+                move.dest === [this.enpassant, 
+                this.turn === 'white' ? 6 : 3]) {
+                this.squares.get(toCoord([move.dest[0], move.orig[1]]))
+                    .piece = null;
+            }
+
+            if(piece.role === 'king') {
+                this.castling.short[this.turn] = false;
+                this.castling.long[this.turn] = false;
+
+                if(move.orig[0] - move.dest[0] === 2) {
+                    this.squares.get(toCoord([4, r])).piece = 
+                    this.squares.get(toCoord([1, r])).piece;
+
+                    this.squares.get(toCoord([1, r])).piece = null;
+                }
+
+                if(move.dest[0] - move.orig[0] === 2) {
+                    this.squares.get(toCoord([6, r])).piece = 
+                    this.squares.get(toCoord([8, r])).piece;
+
+                    this.squares.get(toCoord([8, r])).piece = null;
+                }
+            }
+
+            if(move.orig === [8, r]) 
+                this.castling.short[this.turn] = false;
+        
+            if(move.orig === [1, r]) 
+                this.castling.long[this.turn] = false;
+
+            if(piece.role === 'pawn' && 
+                Math.abs(move.orig[1] - move.dest[1]) === 2 &&
+                !move.blinks.includes(move.dest)) {
+                this.enpassant = move.orig[0];
+            } else {
+                this.enpassant = 0;
+            }
+        } else {
+            if(move.dest) {
+                const piece = this.squares.get(toCoord(move.dest)).piece;
+                
+                if(piece.role === 'pawn') {
+                    this.halfmoves = 0;
+                } else {
+                    this.halfmoves++;
+                }
+
+                this.squares.get(toCoord(move.orig)).piece = piece;
+                
+                this.squares.get(toCoord(move.dest)).piece = {
+                    role: piece.role,
+                    color: piece.color,
+                    tapped: {
+                        target: move.orig,
+                        role: move.target ?? piece.role
+                    }
+                }
+            } else {
+                const k = this.squares.get(toCoord(move.orig))
+                    .blinks.get(targetName);
+                this.squares.get(toCoord(move.orig))
+                    .blinks.set(targetName, k - 1);
+
+                this.squares.get(toCoord(move.orig)).piece = basicTarget;
+            }
+
+            this.enpassant = 0;
+        }
+
+        move.blinks.forEach(key => {
+            const piece = this.squares.get(toCoord(key)).piece;
+            
+            this.squares.get(toCoord(key)).piece = null;
+
+            if(piece.tapped) return;      
+
+            incrementBlinks(this.squares.get(toCoord(key)).blinks,
+                {role: piece.role, color: piece.color});
+            
+            if(key === [8, r]) 
+                this.castling.short[this.turn] = false;
+        
+            if(key === [1, r]) 
+                this.castling.long[this.turn] = false; 
+        });
+
+        this.turn = opposite(this.turn);
+        if(this.turn === 'white') this.fullmoves++;
+
+        return true;
+    }
+
+    isResolved(color: ttc.Color): boolean {
+        return ![...this.squares].some(([_, square]) => 
+            [...square.blinks].some(([c, n]) => 
+                charToPiece(c).color === color && n) ||
+            (square.piece?.tapped &&
+                square.piece.color === color)
+        );
+    }
+
+    isLegal(move: ttc.Move): boolean {
+        const dream = this.copy();
+
+        if(!dream.makeMove(move))
+            return false; 
+
+        return ![...dream.squares]
+            .filter(([_, square]) => square.piece?.color === dream.turn)
+            .flatMap(([coord, _]) => dream.basicDestsOf(toKey(coord)))
+            .some(dest => (piece => piece.tapped || 
+                    (piece.role === 'king' && dream.isResolved(dream.turn))
+                )(dream.squares.get(toCoord(dest)).piece));
+    }
+}

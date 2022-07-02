@@ -1,10 +1,11 @@
 import { SOCKET_ADDR } from './config';
 import { Socket, io } from 'socket.io-client';
 import { Lobby } from './lobby';
-import { Game } from './game';
+import { GameClient } from './gameclient';
 import { attributesModule, classModule, eventListenersModule, h, init, 
     propsModule, styleModule, toVNode, VNode } from 'snabbdom';
 import { ClientToServerEvents, ServerToClientEvents } from './commontypes';
+import { Board } from './ttc/board';
 
 const patch = init([
     attributesModule,
@@ -15,6 +16,7 @@ const patch = init([
 ]);
 window['h'] = h;
 window['patch'] = patch;
+window['Board'] = Board;
 
 let root = toVNode(document.getElementById("root"));
 const setView = (node: VNode) => root = patch(root, node);
@@ -61,7 +63,7 @@ socket.on("lobby_event", (event) => {
     setView(lobby.view());
 });
 
-const game = new Game(pname, action => {
+const game = new GameClient(pname, action => {
     console.log(`Emitting game action ${JSON.stringify(action)}`)
     socket.emit("game_action", action);
 });

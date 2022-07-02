@@ -1,6 +1,5 @@
 import { h, Hooks, VNode } from 'snabbdom';
 import { Api as CgApi } from './chessground/api';
-import { DrawShape } from './chessground/draw';
 import * as cgUtil from './chessground/util';
 import * as cg from './chessground/types';
 

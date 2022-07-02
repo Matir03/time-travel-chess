@@ -5,7 +5,7 @@ import { attributesModule, classModule, eventListenersModule, h,
     init, propsModule, styleModule, toVNode, VNode } from 'snabbdom';
 import { Api } from './chessground/api';
 import { Color, Key, MoveMetadata, Role, Piece, BasicPiece } from './chessground/types';
-import { PieceSelector } from './promotion';
+import { PieceSelector } from './selection';
 import { opposite,  } from './chessground/util';
 import { unselect } from './chessground/board';
 
@@ -71,7 +71,7 @@ function unblink(cg: Api, key: Key, piece: Piece) {
     cg.endTurn();
 }
 
-export class Game {
+export class GameClient {
 
     pname: string;
     state: GameState;
@@ -119,7 +119,7 @@ export class Game {
                             this.emit(new MakeMove({
                                 orig: 'a0',
                                 dest: key,
-                                sel: sr,
+                                target: sr,
                                 blinks: this.cg.getBlinks()
                             }));
 
@@ -165,7 +165,7 @@ export class Game {
                 PROMOTABLE_ROLES,
                 this.color,
                 sr => {
-                    move.sel = sr;
+                    move.target = sr;
                     this.emit(new MakeMove(move)); 
                     promote(this.cg, dest, sr);
                     this.cg.endTurn();
@@ -229,7 +229,7 @@ export class Game {
                             NON_BISHOP_ROLES.concat(maybeBishop, maybePawn),
                             this.color,
                             sr => { 
-                                move.sel = sr;  
+                                move.target = sr;  
                                 this.emit(new MakeMove(move));
                                 tap(this.cg, orig, key, sr);  
                             },
@@ -294,19 +294,19 @@ export class Game {
 
             if(move.orig === 'a0') {
                 unblink(this.cg, move.dest, {
-                    role: move.sel,
+                    role: move.target,
                     color: this.other
                 });
             } else if(this.cg.state.pieces.has(move.orig)) {
                 this.cg.move(move.orig, move.dest);
                 
-                if(move.sel) {
-                    promote(this.cg, move.dest, move.sel);
+                if(move.target) {
+                    promote(this.cg, move.dest, move.target);
                 }
 
                 this.cg.endTurn();
             } else {
-                tap(this.cg, move.orig, move.dest, move.sel);
+                tap(this.cg, move.orig, move.dest, move.target);
             }
         }
     }

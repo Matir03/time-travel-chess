@@ -94,8 +94,8 @@ export class RemoveSeek implements LobbyEvent {
 
 export interface Move {
     orig: Key;
-    dest: Key;
-    sel?: Role;
+    dest?: Key;
+    target?: Role;
     blinks: Key[];
 }
 
