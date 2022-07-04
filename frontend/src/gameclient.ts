@@ -1,13 +1,16 @@
 import Chessground from './chessground';
-import { GameState, GameEvent, GameAction, 
-    MakeMove, PerformMove, Move } from './commontypes';
+import { ReceivedGameState, GameEvent, GameAction, 
+    MakeMove, PerformMove } from './commontypes';
+import { Move } from './ttc/types';
 import { attributesModule, classModule, eventListenersModule, h, 
     init, propsModule, styleModule, toVNode, VNode } from 'snabbdom';
 import { Api } from './chessground/api';
-import { Color, Key, MoveMetadata, Role, Piece, BasicPiece } from './chessground/types';
+import { files, ranks, Color, Key, MoveMetadata, Role, Piece } from './chessground/types';
 import { PieceSelector } from './selection';
-import { opposite,  } from './chessground/util';
+import { opposite, pieceToChar, charToPiece } from './chessground/util';
 import { unselect } from './chessground/board';
+import { Game } from './ttc/game';
+import { toCoord, toKey } from './ttc/board';
 
 const patch = init([
     attributesModule,
@@ -56,9 +59,10 @@ function tap(cg: Api, orig: Key, dest: Key, role?: Role) {
 }
 
 function unblink(cg: Api, key: Key, piece: Piece) {
-    const atk: Map<BasicPiece, number> = cg.state.blinked.get(key);
-    const c = atk.get(piece);
-    atk.set(piece, c - 1);
+    const atk = cg.state.blinked.get(key);
+    const p = pieceToChar(piece);
+    const c = atk.get(p);
+    atk.set(p, c - 1);
 
     cg.state.pieces.set(key, piece);
 
@@ -74,7 +78,8 @@ function unblink(cg: Api, key: Key, piece: Piece) {
 export class GameClient {
 
     pname: string;
-    state: GameState;
+    state: ReceivedGameState;
+    game: Game;
     emit: (action: GameAction) => void;
 
     cg: Api;
@@ -100,33 +105,51 @@ export class GameClient {
         this.cg = Chessground(this.cgNode, {
             addDimensionsCssVars: true,
 
-            movable: {events: {
-                after: (orig, dest, blinks, meta) =>
-                    this.afterMove(orig, dest, blinks, meta)
-            }},
+            movable: {
+                free: false,
+                showDests: true,
+                events: {
+                    after: (orig, dest, blinks, meta) =>
+                        this.afterMove(orig, dest, blinks, meta)
+                }
+            },
+
+            premovable: {enabled: false},
 
             blinkable: {
+                keys: [],
+
+                onBlink: (key) => {
+                    this.setDestsMap();
+                },
+
                 unblinker: (key) => {
                     const roles = [...new Set(this.cg.state.blinked.get(key))]
                         .filter(([p, n]) => n > 0 && 
-                            p.color === this.color)
-                        .map(([p, n]) => p.role);
+                            charToPiece(p).color === this.color)
+                        .map(([p, n]) => charToPiece(p).role);
 
-                    if(roles.length === 0) return null;
+                    if(roles.length === 0) return;
                     
                     this.sel.start(key, roles, this.color,
                         sr => {
-                            this.emit(new MakeMove({
-                                orig: 'a0',
-                                dest: key,
+                            const move = {
+                                orig: toKey(key),
                                 target: sr,
-                                blinks: this.cg.getBlinks()
-                            }));
+                                blinks: this.cg.getBlinks().map(toKey)
+                            };
+
+                            if(!this.game.board.isLegal(move))
+                                return;
+                            
+                            this.emit(new MakeMove(move));
 
                             unblink(this.cg, key, {
                                 role: sr,
                                 color: this.color
                             });
+
+                            this.setDestsMap();
                         },
                     );
                 }
@@ -151,14 +174,25 @@ export class GameClient {
     }
 
     afterMove(orig: Key, dest: Key, blinks: Key[], meta: MoveMetadata) {
-        const move: Move = {orig, dest, blinks};
+        const move: Move = {
+            orig: toKey(orig), 
+            dest: toKey(dest), 
+            blinks: blinks.map(toKey)
+        };
 
         const piece = this.cg.state.pieces.get(dest);
+
+        if(piece.role === 'pawn' && 
+            this.game.board.enpassant === toKey(dest)[0] &&
+            dest[1] === (this.color === 'white' ? '6' : '3')) {
+            this.cg.state.pieces.delete(dest[0] + (this.color === 'white' ?
+                '5' : '4') as Key);
+        }
         
         if(piece.role === 'pawn' && (
-            (dest[1] == '8' && 
+            (dest[1] === '8' && 
             this.color === 'white') || 
-            (dest[1] == '1' && 
+            (dest[1] === '1' && 
             this.color == 'black')
         )) {
             this.sel.start(dest, 
@@ -169,6 +203,7 @@ export class GameClient {
                     this.emit(new MakeMove(move)); 
                     promote(this.cg, dest, sr);
                     this.cg.endTurn();
+                    this.setDestsMap();
                 },
                 () => {
                     this.cg.state.pieces.set(orig, piece);
@@ -187,6 +222,7 @@ export class GameClient {
         } else {
             this.emit(new MakeMove(move));
             this.cg.endTurn();
+            this.setDestsMap();
         }
     }
 
@@ -205,22 +241,33 @@ export class GameClient {
                     sameColor(this.selected, key)
                 )) {                    
                     const move: Move = {
-                        orig: this.selected,
-                        dest: key,
-                        blinks: this.cg.getBlinks()
+                        orig: toKey(this.selected),
+                        dest: toKey(key),
+                        blinks: this.cg.getBlinks().map(toKey)
                     }
 
-                    if(piece.role === 'pawn') {
+                    if(piece.role === 'pawn') {                                
+                        if(!this.game.board.isLegal({
+                            orig: move.orig,
+                            dest: move.dest,
+                            blinks: move.blinks,
+                            target: 'queen'
+                            })) return;
+
+                        const psq = `${key[0]}${
+                            this.color === 'white' ?
+                            '8' : '1'}` as Key;
+                        
                         const maybeBishop: Role[] = 
-                            sameColor(this.selected, `${key[0]}${
-                                this.color === 'white' ?
-                                '8' : '1'}` as Key) ?
+                            sameColor(this.selected, psq) ?
                             ['bishop'] : [];
 
                         const maybePawn: Role[] = 
                             key[0] === this.selected[0] &&
-                            key[1]  <  this.selected[1] &&
-                            this.selected[1] < '8' ?
+                            (this. color === 'white' ? 
+                                key[1] < this.selected[1] :
+                                key[1] > this.selected[1]) &&
+                            this.selected[1] !== psq ?
                             ['pawn'] : [];
 
                         const orig = this.selected;
@@ -229,9 +276,11 @@ export class GameClient {
                             NON_BISHOP_ROLES.concat(maybeBishop, maybePawn),
                             this.color,
                             sr => { 
-                                move.target = sr;  
+                                move.target = sr;
+                                
                                 this.emit(new MakeMove(move));
                                 tap(this.cg, orig, key, sr);  
+                                this.setDestsMap();
                             },
                             () => {
                                 unselect(this.cg.state);
@@ -239,8 +288,11 @@ export class GameClient {
                             }
                         )
                     } else { 
+                        if(!this.game.board.isLegal(move))
+                            return;
                         this.emit(new MakeMove(move)); 
                         tap(this.cg, this.selected, key);   
+                        this.setDestsMap();
                     }                     
                 }
                 this.cg.setAutoShapes([]);
@@ -260,20 +312,47 @@ export class GameClient {
         }
     }
 
-    setState(state: GameState) {
+    setDestsMap() {
+        const coords = files.flatMap(file => 
+            ranks.map(rank => `${file}${rank}` as Key));
+
+        const blinks = this.cg.getBlinks().map(toKey);
+
+        this.cg.set({
+            movable: {
+                dests: new Map(coords.map(coord => [coord, 
+                    this.game.board.legalDests(toKey(coord), blinks)
+                        .map(toCoord) as Key[]]))
+            },
+            blinkable: {
+                keys: coords.filter(coord => 
+                    this.game.board.canBlink(toKey(coord), blinks)) 
+            }
+        });
+
+        return 
+    }
+
+    setState(state: ReceivedGameState) {
         this.state = state;
 
         this.color = state.white === this.pname?
             "white" : "black";
 
         this.other = opposite(this.color);
+
+        this.game = new Game(state.game);
         
         this.cg.set({
-            fen: state.fen,
+            fen: this.game.fens[this.game.ply],
             orientation: this.color,
-            turnColor: state.turnColor,
-            movable: {color: this.color},
+            turnColor: this.game.board.turn,
+            movable: {
+                color: this.color
+            }
         });
+
+        this.setDestsMap();
     }
 
     update(event: GameEvent) {
@@ -281,33 +360,42 @@ export class GameClient {
 
         if(event.kind === "PerformMove") {
             const color = (event as PerformMove).color;
-            
-            if(color === this.color) return;
 
             const move = (event as PerformMove).move;
 
-            this.oldLastMove = [move.orig, move.dest]
+            if(!this.game.makeMove(move)) {
+                console.log("Illegal move!");
+                return;
+            }
+            
+            if(color === this.color) return;
+
+            this.oldLastMove = [toCoord(move.orig) as Key].concat(
+                move.dest ? toCoord(move.dest) as Key : []);
             
             move.blinks.forEach(key => 
-                this.cg.state.pieces.get(key).blinking = true
+                this.cg.state.pieces.get(toCoord(key) as Key).blinking = true
             )
 
-            if(move.orig === 'a0') {
-                unblink(this.cg, move.dest, {
+            if(!move.dest) {
+                unblink(this.cg, toCoord(move.orig) as Key, {
                     role: move.target,
                     color: this.other
                 });
-            } else if(this.cg.state.pieces.has(move.orig)) {
-                this.cg.move(move.orig, move.dest);
+            } else if(this.cg.state.pieces.has(toCoord(move.orig) as Key)) {
+                this.cg.move(toCoord(move.orig) as Key, toCoord(move.dest) as Key);
                 
                 if(move.target) {
-                    promote(this.cg, move.dest, move.target);
+                    promote(this.cg, toCoord(move.dest) as Key, move.target);
                 }
 
                 this.cg.endTurn();
             } else {
-                tap(this.cg, move.orig, move.dest, move.target);
+                tap(this.cg, toCoord(move.orig) as Key, 
+                    toCoord(move.dest) as Key, move.target);
             }
+
+            this.setDestsMap();
         }
     }
 

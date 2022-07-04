@@ -1,6 +1,7 @@
 import { SOCKET_PORT } from './config.js';
 import { Server } from 'socket.io';
 import { AddSeek, MappedLobbyState, PerformMove, RemoveSeek } from './commontypes.js';
+import { Game } from './ttc/game.js';
 const io = new Server(SOCKET_PORT, {
     serveClient: false,
     cors: { origin: '*' }
@@ -95,9 +96,7 @@ function newGame(wSocket, bSocket) {
     games.set(room, {
         white: wSocket.data.name,
         black: bSocket.data.name,
-        turnColor: "white",
-        fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-        moves: []
+        game: new Game()
     });
     console.log(`Creating new game ${JSON.stringify(games.get(room))} 
         in room ${room}`);
@@ -124,8 +123,10 @@ function gameActionHandler(socket) {
                 "white" : "black";
             console.log(`Making move ${JSON.stringify(move)} 
                 in ${game}`);
-            games.get(game).moves.push(move);
-            io.to(game).emit("game_event", new PerformMove(move, color));
+            if (games.get(game).game.makeMove(move))
+                io.to(game).emit("game_event", new PerformMove(move, color));
+            else
+                console.log(`Illegal move in ${game}!`);
         }
     };
 }

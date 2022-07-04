@@ -1,5 +1,5 @@
-import * as ttc from './types';
-import { Board } from './board';
+import * as ttc from './types.js';
+import { Board } from './board.js';
 
 export const startingFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - - 0 1";
 

@@ -1,6 +1,7 @@
 import { HeadlessState } from './state';
 import { pos2key, key2pos, opposite, distanceSq, allPos, computeSquareCenter } from './util';
 import { premove, queen, knight } from './premove';
+import { pieceToChar } from './util';
 import * as cg from './types';
 
 export function callUserFunction<T extends (...args: any[]) => void>(f: T | undefined, ...args: Parameters<T>): void {
@@ -134,16 +135,13 @@ export function getBlinks(state: HeadlessState) {
 export function endTurn(state: HeadlessState) {
   const blinks = [...state.pieces].filter(([k, p]) => p.blinking);
   blinks.forEach(([key, piece]) => {
-    const p: cg.BasicPiece = {
-      role: piece.role,
-      color: piece.color,
-    }
-
+    
     if(!state.blinked.has(key)) 
       state.blinked.set(key, new Map());
     
+    const p = pieceToChar(piece);
     const atk = state.blinked.get(key);
-    const c = atk.has(p) ? atk.get(p) : 0;
+    const c = atk.get(p) ?? 0;
     
     atk.set(p, c + 1);
   });

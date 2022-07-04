@@ -8,6 +8,40 @@ export const pos2key = (pos: cg.Pos): cg.Key => allKeys[8 * pos[0] + pos[1]];
 
 export const key2pos = (k: cg.Key): cg.Pos => [k.charCodeAt(0) - 97, k.charCodeAt(1) - 49];
 
+const role2sym = {
+  king: 'K',
+  queen: 'Q',
+  rook: 'R',
+  bishop: 'B',
+  knight: 'N',
+  pawn: 'P'
+}
+
+const sym2role = {
+  K: 'king',
+  Q: 'queen',
+  R: 'rook',
+  B: 'bishop',
+  N: 'knight',
+  P: 'pawn'
+}
+
+export function pieceToChar(piece: cg.Piece): string {
+  return String.fromCharCode(
+      role2sym[piece.role].charCodeAt(0) + 
+      (piece.color === 'white' ? 0 : 
+      ('a'.charCodeAt(0) - 'A'.charCodeAt(0))));
+}
+
+export function charToPiece(c : string): cg.Piece {
+  const C = c.toUpperCase();
+  
+  return {
+      color: c === C ? 'white' : 'black',
+      role: sym2role[C]
+  }
+}
+
 export const allPos: readonly cg.Pos[] = allKeys.map(key2pos);
 
 export function memo<A>(f: () => A): cg.Memo<A> {

@@ -20,10 +20,11 @@ export function blink(s: State, e: Event) {
         return;
     }
 
-    if( piece.color !== s.turnColor ||
-        piece.role === 'king') return;
+    if(!s.blinkable.keys.includes(key)) return;
 
     piece.blinking = !piece.blinking;
+
+    s.blinkable.onBlink(key);
 
     render(s);
 }

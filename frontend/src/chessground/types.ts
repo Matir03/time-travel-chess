@@ -6,17 +6,11 @@ export type Key = 'a0' | `${File}${Rank}`;
 export type FEN = string;
 export type Pos = [number, number];
 
-
 export interface Piece {
   role: Role;
   color: Color;
   tapped?: Key;
   blinking?: boolean;
-}
-
-export interface BasicPiece {
-  role: Role;
-  color: Color;
 }
 
 export interface Drop {
@@ -25,7 +19,7 @@ export interface Drop {
 }
 
 export type Pieces = Map<Key, Piece>;
-export type Blinked = Map<Key, Map<BasicPiece, number>>;
+export type Blinked = Map<Key, Map<string, number>>;
 export type PiecesDiff = Map<Key, Piece | undefined>;
 
 export type KeyPair = [Key, Key];
@@ -104,7 +98,7 @@ export interface Timer {
   stop: () => number;
 }
 
-export type Unblinker = (key: Key) => void
+export type BlinkHandler = (key: Key) => void
 
 export type Redraw = () => void;
 export type Unbind = () => void;

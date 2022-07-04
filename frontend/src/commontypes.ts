@@ -1,4 +1,4 @@
-import { Color, Key, Role } from "./chessground/types";
+import { Color, Move } from "./ttc/types";
 
 export type SeekColor = "White" | "Black" | "Random";
 export const colors: Array<SeekColor> = ["White", "Black", "Random"];
@@ -92,20 +92,11 @@ export class RemoveSeek implements LobbyEvent {
     }
 }
 
-export interface Move {
-    orig: Key;
-    dest?: Key;
-    target?: Role;
-    blinks: Key[];
-}
-
-export interface GameState {
+export interface ReceivedGameState {
     white: string;
     black: string;
 
-    turnColor: 'white' | 'black';
-    fen: string;
-    moves: Move[];
+    game: Move[];
 }
 
 export interface GameAction {
@@ -138,7 +129,7 @@ export class PerformMove implements GameEvent {
 
 export interface ServerToClientEvents {
     join_lobby:  (state: LobbyState) => void;
-    join_game:   (state: GameState)  => void;
+    join_game:   (state: ReceivedGameState)  => void;
     lobby_event: (event: LobbyEvent) => void;
     game_event:  (event: GameEvent)  => void;
 }

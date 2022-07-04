@@ -4,6 +4,7 @@ import { AcceptSeek, AddSeek, DeleteSeek, GameAction, GameState, LobbyAction,
     MakeMove, MakeSeek, MappedLobbyState, PerformMove, 
     RemoveSeek, Seek } from './commontypes.js';
 import { TTCServer, TTCSocket } from './servertypes.js';
+import { Game } from './ttc/game.js';
 
 const io: TTCServer = new Server(SOCKET_PORT, {
     serveClient: false,
@@ -128,9 +129,8 @@ function newGame(wSocket: TTCSocket, bSocket: TTCSocket) {
     games.set(room, {
         white: wSocket.data.name,
         black: bSocket.data.name,
-        turnColor: "white",
-        fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-        moves: []
+
+        game: new Game()
     });
 
     console.log(`Creating new game ${JSON.stringify(games.get(room))} 
@@ -168,10 +168,11 @@ function gameActionHandler(socket: TTCSocket) {
             console.log(`Making move ${JSON.stringify(move)} 
                 in ${game}`);
 
-            games.get(game).moves.push(move);
-
-            io.to(game).emit("game_event", 
-                new PerformMove(move, color));
+            if(games.get(game).game.makeMove(move))
+                io.to(game).emit("game_event", 
+                    new PerformMove(move, color));
+            else 
+                console.log(`Illegal move in ${game}!`);
         }
     };
 }

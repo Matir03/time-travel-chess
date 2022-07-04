@@ -43,7 +43,9 @@ export interface HeadlessState {
     rookCastle: boolean; // castle by moving the king to the rook
   };
   blinkable?: {
-    unblinker: cg.Unblinker
+    keys: cg.Key[],
+    onBlink: (key: cg.Key) => void,
+    unblinker: cg.BlinkHandler
   };
   premovable: {
     enabled: boolean; // allow premoves for color that can not move
@@ -139,6 +141,8 @@ export function defaults(): HeadlessState {
       rookCastle: true,
     },
     blinkable: {
+      keys: [],
+      onBlink: (key: cg.Key) => {},
       unblinker: () => null
     },
     premovable: {
