@@ -1,4 +1,4 @@
-import * as ttc from './types.js';
+import * as ttc from './types';
 
 export function inBounds(key: ttc.Key) {
     return key && key.every(k => k >= 1 && k <= 8);
@@ -679,9 +679,14 @@ export class Board {
     }
 
     result(): ttc.Color | 'draw' | 'none' {
+        const last = opposite(this.turn);
+
+        if(this.killer === last && this.isResolved(last))
+            return last; 
+
         if(this.hasLegalMoves([])) return 'none';
 
-        if(this.inCheck()) return opposite(this.turn);
+        if(this.inCheck()) return last;
 
         return 'draw';
     }
