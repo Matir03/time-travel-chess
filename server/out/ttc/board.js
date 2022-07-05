@@ -8,6 +8,9 @@ export function opposite(color) {
 export function sameKey(key1, key2) {
     return key1[0] === key2[0] && key1[1] === key2[1];
 }
+export function sameColor(key1, key2) {
+    return (key1[0] + key2[0] + key1[1] + key2[1]) % 2 === 0;
+}
 function incrementBlinks(blinks, piece) {
     var _a;
     const pname = pieceToChar(piece);
@@ -267,13 +270,13 @@ export class Board {
             const dir = piece.color === 'white' ?
                 1 : -1;
             if (this.isEmpty([x0, y0 + dir]) &&
-                (!piece.tapped ||
+                (!piece.tapped || piece.tapped.role !== 'pawn' ||
                     (piece.tapped.target[1] - y0) * dir >= 1)) {
                 dests.push([x0, y0 + dir]);
                 if ((dir === -1 && y0 === 7) ||
                     (dir === 1 && y0 === 2)) {
                     if (this.isEmpty([x0, y0 + 2 * dir]) &&
-                        (!piece.tapped ||
+                        (!piece.tapped || piece.tapped.role !== 'pawn' ||
                             (piece.tapped.target[1] - y0) * dir >= 2))
                         dests.push([x0, y0 + 2 * dir]);
                 }
@@ -311,15 +314,17 @@ export class Board {
         if (!inBounds(move.orig))
             return false;
         const piece = this.squares.get(toCoord(move.orig)).piece;
+        const prom = this.turn === 'white' ? 8 : 1;
         if (piece) {
-            return this.basicDests(move.orig).some(dest => dest[0] === move.dest[0] &&
-                dest[1] === move.dest[1]) &&
-                (!move.target ||
+            return this.basicDests(move.orig).some(dest => sameKey(dest, move.dest)) &&
+                ((!move.target && (piece.role !== 'pawn' ||
+                    move.dest[1] !== prom)) ||
                     (piece.role === 'pawn' &&
                         ['queen', 'rook', 'bishop', 'knight']
                             .includes(move.target) &&
-                        move.dest[1] ===
-                            (piece.color === 'white' ? 8 : 1)));
+                        move.dest[1] === prom) &&
+                        (!piece.tapped ||
+                            piece.tapped.role === move.target));
         }
         if (move.dest) {
             if (!inBounds(move.dest))
@@ -328,6 +333,9 @@ export class Board {
             return (piece === null || piece === void 0 ? void 0 : piece.color) === this.turn &&
                 piece.role !== 'king' &&
                 !piece.tapped &&
+                (piece.role !== 'bishop' ||
+                    sameColor(move.orig, move.dest)) &&
+                !move.blinks.some(key => sameKey(key, move.dest)) &&
                 (!move.target ||
                     (piece.role === 'pawn' &&
                         (['queen', 'rook', 'knight'].includes(move.target) ||
@@ -338,8 +346,7 @@ export class Board {
                                     (this.turn === 'black' &&
                                         move.orig[1] < move.dest[1]))) ||
                             (move.target === 'bishop' &&
-                                (move.orig[0] + move.orig[1] + move.dest[0]) % 2
-                                    === (this.turn === 'white' ? 0 : 1)))));
+                                sameColor(move.orig, [move.dest[0], prom])))));
         }
         return !!this.squares.get(toCoord(move.orig)).blinks.get(pieceToChar({ role: move.target, color: this.turn }));
     }
@@ -352,6 +359,11 @@ export class Board {
             role: (_a = move.target) !== null && _a !== void 0 ? _a : 'king',
             color: this.turn
         };
+        if (piece === null || piece === void 0 ? void 0 : piece.tapped)
+            basicTarget.tapped = {
+                target: piece.tapped.target,
+                role: piece.tapped.role
+            };
         const targetName = pieceToChar(basicTarget);
         const r = this.turn === 'white' ? 1 : 8;
         if (piece) {
@@ -489,10 +501,10 @@ export class Board {
     legalTaps(orig, blinks) {
         if (!this.isEmpty(orig))
             return [];
-        return [...this.squares].filter(([coord, _]) => {
-            var _a, _b;
+        return [...this.squares].filter(([coord, sq]) => {
+            var _a;
             return this.isLegal({ orig, dest: toKey(coord), blinks,
-                target: ((_b = (_a = this.squares.get(coord)) === null || _a === void 0 ? void 0 : _a.piece) === null || _b === void 0 ? void 0 : _b.role) === 'pawn' ?
+                target: ((_a = sq.piece) === null || _a === void 0 ? void 0 : _a.role) === 'pawn' ?
                     'queen' : null });
         })
             .map(([coord, _]) => toKey(coord));
@@ -511,7 +523,7 @@ export class Board {
         var _a, _b;
         return inBounds(orig) &&
             ((_b = (_a = this.squares.get(toCoord(orig))) === null || _a === void 0 ? void 0 : _a.piece) === null || _b === void 0 ? void 0 : _b.color) === this.turn &&
-            this.hasLegalMoves(blinks.concat(orig));
+            this.hasLegalMoves(blinks.concat([orig]));
     }
     inCheck() {
         const dream = this.copy();
@@ -523,10 +535,13 @@ export class Board {
             ((piece === null || piece === void 0 ? void 0 : piece.role) === 'king' && dream.isResolved(dream.turn)))(dream.squares.get(toCoord(dest)).piece));
     }
     result() {
+        const last = opposite(this.turn);
+        if (this.killer === last && this.isResolved(last))
+            return last;
         if (this.hasLegalMoves([]))
             return 'none';
         if (this.inCheck())
-            return opposite(this.turn);
+            return last;
         return 'draw';
     }
 }

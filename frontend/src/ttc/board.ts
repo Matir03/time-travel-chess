@@ -12,6 +12,10 @@ export function sameKey(key1: ttc.Key, key2: ttc.Key): boolean {
     return key1[0] === key2[0] && key1[1] === key2[1];
 }
 
+export function sameColor(key1: ttc.Key, key2: ttc.Key): boolean {
+    return (key1[0] + key2[0] + key1[1] + key2[1]) % 2 === 0;
+}
+
 function incrementBlinks(blinks: ttc.Blinks, piece: ttc.Piece) {
     const pname = pieceToChar(piece); 
 
@@ -362,14 +366,14 @@ export class Board {
                 1 : -1;
 
             if(this.isEmpty([x0, y0 + dir]) && 
-               (!piece.tapped || 
+               (!piece.tapped || piece.tapped.role !== 'pawn' ||
                 (piece.tapped.target[1] - y0) * dir >= 1)) {
                 dests.push([x0, y0 + dir]);
 
                 if((dir === -1 && y0 === 7) || 
                     (dir === 1 && y0 === 2)) {
                     if(this.isEmpty([x0, y0 + 2 * dir]) &&
-                       (!piece.tapped || 
+                       (!piece.tapped || piece.tapped.role !== 'pawn' ||
                         (piece.tapped.target[1] - y0) * dir >= 2)) 
                         dests.push([x0, y0 + 2 * dir]);
                 } 
@@ -416,16 +420,19 @@ export class Board {
 
         const piece = this.squares.get(toCoord(move.orig)).piece;
 
+        const prom = this.turn === 'white' ? 8 : 1;
+
         if(piece) {
             return this.basicDests(move.orig).some(dest =>
-                    dest[0] === move.dest[0] &&
-                    dest[1] === move.dest[1]) &&
-                (!move.target || 
+                    sameKey(dest, move.dest)) &&
+                ((!move.target && (piece.role !== 'pawn' || 
+                    move.dest[1] !== prom)) || 
                     (piece.role === 'pawn' &&
                     ['queen', 'rook', 'bishop', 'knight']
                         .includes(move.target) &&
-                    move.dest[1] === 
-                        (piece.color  === 'white' ? 8 : 1)));
+                    move.dest[1] === prom) &&
+                    (!piece.tapped || 
+                        piece.tapped.role === move.target));
         }
 
         if(move.dest) {
@@ -436,6 +443,9 @@ export class Board {
             return piece?.color === this.turn &&
                 piece.role !== 'king' &&
                 !piece.tapped && 
+                (piece.role !== 'bishop' ||
+                 sameColor(move.orig, move.dest)) &&
+                !move.blinks.some(key => sameKey(key, move.dest)) &&
                 (!move.target || 
                  (piece.role === 'pawn' &&
                   (['queen', 'rook', 'knight'].includes(move.target) ||
@@ -447,8 +457,7 @@ export class Board {
                       move.orig[1] < move.dest[1]))
                    ) ||
                    (move.target === 'bishop' && 
-                    (move.orig[0] + move.orig[1] + move.dest[0]) % 2
-                      === (this.turn === 'white' ? 0 : 1)
+                    sameColor(move.orig, [move.dest[0], prom])
                    )
                   ) 
                  )
@@ -468,6 +477,13 @@ export class Board {
             role: move.target ?? 'king',
             color: this.turn
         };
+
+        if(piece?.tapped) 
+            basicTarget.tapped = {
+                target: piece.tapped.target,
+                role: piece.tapped.role
+            }
+
         const targetName = pieceToChar(basicTarget);
 
         const r = this.turn === 'white' ? 1 : 8;
@@ -637,9 +653,9 @@ export class Board {
     legalTaps(orig: ttc.Key, blinks: ttc.Key[]): ttc.Key[] {
         if(!this.isEmpty(orig)) return [];
         
-        return [...this.squares].filter(([coord, _]) => 
+        return [...this.squares].filter(([coord, sq]) => 
             this.isLegal({orig, dest: toKey(coord), blinks,
-                target: this.squares.get(coord)?.piece?.role === 'pawn' ?
+                target: sq.piece?.role === 'pawn' ?
                 'queen' : null}))
                 .map(([coord, _]) => toKey(coord));
     }

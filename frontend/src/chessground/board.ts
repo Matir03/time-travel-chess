@@ -128,13 +128,14 @@ export function baseNewPiece(state: HeadlessState, piece: cg.Piece, key: cg.Key,
 
 export function getBlinks(state: HeadlessState) {
   return [...state.pieces]
-    .filter(([k, p]) => p.blinking)
+    .filter(([k, p]) => p?.blinking)
     .map(([k, p]) => k);
 }
 
 export function endTurn(state: HeadlessState) {
   const blinks = [...state.pieces].filter(([k, p]) => p.blinking);
   blinks.forEach(([key, piece]) => {
+    if(piece.tapped) return;
     
     if(!state.blinked.has(key)) 
       state.blinked.set(key, new Map());

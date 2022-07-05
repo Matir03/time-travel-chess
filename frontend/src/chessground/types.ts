@@ -9,7 +9,10 @@ export type Pos = [number, number];
 export interface Piece {
   role: Role;
   color: Color;
-  tapped?: Key;
+  tapped?: {
+    target: Key,
+    role: Role
+  };
   blinking?: boolean;
 }
 

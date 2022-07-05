@@ -46,7 +46,10 @@ function tap(cg: Api, orig: Key, dest: Key, role?: Role) {
     cg.state.pieces.set(dest, {
         color: piece.color,
         role: piece.role,
-        tapped: orig,
+        tapped: {
+            target: orig,
+            role
+        },
     });
     
     cg.set({
@@ -88,11 +91,11 @@ export class GameClient {
     sel: PieceSelector;
     selNode: VNode;
 
-    selected: Key;
     color: Color;
     other: Color;
 
     oldLastMove: Key[];
+    selected: Key;
 
     constructor(pname: string, 
         emit: (action: GameAction) => void) {
@@ -195,8 +198,8 @@ export class GameClient {
             (dest[1] === '1' && 
             this.color == 'black')
         )) {
-            this.sel.start(dest, 
-                PROMOTABLE_ROLES,
+            this.sel.start(dest,
+                piece.tapped ? [piece.tapped.role] : PROMOTABLE_ROLES,
                 this.color,
                 sr => {
                     move.target = sr;
@@ -215,6 +218,7 @@ export class GameClient {
                     }
 
                     this.cg.state.lastMove = this.oldLastMove;
+                    this.setDestsMap();
 
                     this.cg.redrawAll();
                 }
@@ -227,88 +231,88 @@ export class GameClient {
     }
 
     onSelect(key: Key) {
-        if(this.cg.state.turnColor === this.other) return;
+        if(this.cg.state.turnColor === this.other ||
+            (this.cg.state.selected && !this.selected)) return;
 
         const piece = this.cg.state.pieces.get(key);
+
+        if(!this.cg.state.selected) 
+            this.selected = null;
         
         if(piece) {
-            if(this.selected) {
-                if(!piece.tapped && 
-                   !piece.blinking &&
-                    piece.color === this.color &&
-                    piece.role !== 'king' && (
-                    piece.role !== 'bishop' ||
-                    sameColor(this.selected, key)
-                )) {                    
-                    const move: Move = {
-                        orig: toKey(this.selected),
-                        dest: toKey(key),
-                        blinks: this.cg.getBlinks().map(toKey)
-                    }
-
-                    if(piece.role === 'pawn') {                                
-                        if(!this.game.board.isLegal({
-                            orig: move.orig,
-                            dest: move.dest,
-                            blinks: move.blinks,
-                            target: 'queen'
-                            })) return;
-
-                        const psq = `${key[0]}${
-                            this.color === 'white' ?
-                            '8' : '1'}` as Key;
-                        
-                        const maybeBishop: Role[] = 
-                            sameColor(this.selected, psq) ?
-                            ['bishop'] : [];
-
-                        const maybePawn: Role[] = 
-                            key[0] === this.selected[0] &&
-                            (this. color === 'white' ? 
-                                key[1] < this.selected[1] :
-                                key[1] > this.selected[1]) &&
-                            this.selected[1] !== psq ?
-                            ['pawn'] : [];
-
-                        const orig = this.selected;
-
-                        this.sel.start(this.selected,
-                            NON_BISHOP_ROLES.concat(maybeBishop, maybePawn),
-                            this.color,
-                            sr => { 
-                                move.target = sr;
-                                
-                                this.emit(new MakeMove(move));
-                                tap(this.cg, orig, key, sr);  
-                                this.setDestsMap();
-                            },
-                            () => {
-                                unselect(this.cg.state);
-                                this.cg.redrawAll();
-                            }
-                        )
-                    } else { 
-                        if(!this.game.board.isLegal(move))
-                            return;
-                        this.emit(new MakeMove(move)); 
-                        tap(this.cg, this.selected, key);   
-                        this.setDestsMap();
-                    }                     
+            if(this.selected) {             
+                
+                const move: Move = {
+                    orig: toKey(this.selected),
+                    dest: toKey(key),
+                    blinks: this.cg.getBlinks().map(toKey)
                 }
-                this.cg.setAutoShapes([]);
+
+                if(piece.role === 'pawn') {                                
+                    if(!this.game.board.isLegal({
+                        orig: move.orig,
+                        dest: move.dest,
+                        blinks: move.blinks,
+                        target: 'queen'
+                        })) return;
+
+                    const psq = `${key[0]}${
+                        this.color === 'white' ?
+                        '8' : '1'}` as Key;
+                    
+                    const maybeBishop: Role[] = 
+                        sameColor(this.selected, psq) ?
+                        ['bishop'] : [];
+
+                    const maybePawn: Role[] = 
+                        key[0] === this.selected[0] &&
+                        (this. color === 'white' ? 
+                            key[1] < this.selected[1] :
+                            key[1] > this.selected[1]) &&
+                        this.selected[1] !== psq ?
+                        ['pawn'] : [];
+
+                    const orig = this.selected;
+
+                    this.sel.start(this.selected,
+                        NON_BISHOP_ROLES.concat(maybeBishop, maybePawn),
+                        this.color,
+                        sr => { 
+                            move.target = sr;
+                            
+                            this.emit(new MakeMove(move));
+                            tap(this.cg, orig, key, sr);  
+                            this.setDestsMap();
+                        },
+                        () => {
+                            unselect(this.cg.state);
+                            this.cg.redrawAll();
+                        }
+                    )
+                } else { 
+                    if(!this.game.board.isLegal(move))
+                        return;
+                    this.emit(new MakeMove(move)); 
+                    tap(this.cg, this.selected, key);   
+                    this.setDestsMap();
+                }                     
+
                 this.selected = null;
+                this.cg.state.selected = null;
             }
         } else {
-            if(this.selected === key) {
+            if(this.selected === key || 
+                this.game.board.legalTaps(toKey(key), 
+                    this.cg.getBlinks().map(toKey))
+                    .length === 0) {
                 this.selected = null;
-                this.cg.setAutoShapes([]);
+                this.cg.state.selected = null;
             } else {
                 this.selected = key;
-                this.cg.setAutoShapes([{
-                    orig: key,
-                    brush: 'red'
-                }]);
+                this.cg.state.selected = key;
             }
+
+            this.cg.redrawAll();
         }
     }
 
@@ -321,16 +325,17 @@ export class GameClient {
         this.cg.set({
             movable: {
                 dests: new Map(coords.map(coord => [coord, 
-                    this.game.board.legalDests(toKey(coord), blinks)
-                        .map(toCoord) as Key[]]))
+                    (this.game.board.isEmpty(toKey(coord)) ?
+                    this.game.board.legalTaps(toKey(coord), blinks) :
+                    this.game.board.legalDests(toKey(coord), blinks)) 
+                        .map(toCoord) as Key[]
+                    ])) 
             },
             blinkable: {
                 keys: coords.filter(coord => 
                     this.game.board.canBlink(toKey(coord), blinks)) 
             }
         });
-
-        return 
     }
 
     setState(state: ReceivedGameState) {
@@ -344,13 +349,36 @@ export class GameClient {
         this.game = new Game(state.game);
         
         this.cg.set({
-            fen: this.game.fens[this.game.ply],
+            fen: "8/8/8/8/8/8/8/8",
             orientation: this.color,
             turnColor: this.game.board.turn,
             movable: {
                 color: this.color
             }
         });
+
+        this.game.board.squares.forEach((sq, coord) => {
+            this.cg.state.blinked.set(coord as Key, new Map(sq.blinks));
+
+            if(sq.piece)
+                this.cg.state.pieces.set(coord as Key, {
+                    role: sq.piece.role, 
+                    color: sq.piece.color,
+                    tapped: sq.piece.tapped ? {
+                        target: toCoord(sq.piece.tapped.target) as Key,
+                        role: sq.piece.tapped.role
+                    } : null,
+                });
+        });
+
+        const lastMove = state.game.at(-1);
+
+        if(lastMove) {
+            this.cg.state.lastMove = [toCoord(lastMove.orig) as Key];
+
+            if(lastMove.dest) 
+                this.cg.state.lastMove.push(toCoord(lastMove.dest) as Key);
+        }
 
         this.setDestsMap();
     }
