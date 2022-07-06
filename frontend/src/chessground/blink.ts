@@ -20,7 +20,7 @@ export function blink(s: State, e: Event) {
         return;
     }
 
-    if(!s.blinkable.keys.includes(key)) return;
+    if(!piece.blinking && !s.blinkable.keys.includes(key)) return;
 
     piece.blinking = !piece.blinking;
 

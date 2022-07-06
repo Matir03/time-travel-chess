@@ -614,25 +614,77 @@ export class Board {
         );
     }
 
+    canWin(): boolean {
+        const blinks = [...this.squares]
+            .filter(([_, sq]) => sq.piece?.tapped &&
+                sq.piece.color === this.turn)
+
+        const wrongs = blinks.filter(([coord, sq]) => 
+            coord !== toCoord(sq.piece.tapped.target) ||
+            sq.piece.role !== sq.piece.tapped.role);
+
+        const unblinks = [...this.squares]
+            .flatMap(([coord, sq]) => [...sq.blinks]
+                .flatMap(([p, n]) => charToPiece(p).color === this.turn ?
+                    Array.from({length: n}, _ => coord) : []));
+
+        if(unblinks.length + wrongs.length >= 2) return false;
+
+        if(wrongs.length) {
+            const [coord, sq] = wrongs.at(0);
+
+            const dream = this.copy();
+
+            return dream.makeMove({
+                orig: toKey(coord),
+                dest: sq.piece.tapped.target,
+                target: sq.piece.tapped.role !== sq.piece.role ? 
+                    sq.piece.tapped.role : null,
+                blinks: blinks.map(([c, _]) => toKey(c))
+            }) && dream.killer === this.turn;
+        }
+
+        if(unblinks.length) {
+            const coord = unblinks.at(0)
+
+            return this.isEmpty(toKey(coord)) && 
+                this.killer === this.turn;
+        }       
+
+        const canKill = this.killer === this.turn || (!this.killer 
+            && [...this.squares]
+            .filter(([_, square]) => square.piece?.color === this.turn)
+            .flatMap(([coord, _]) => this.basicDests(toKey(coord)))
+            .some(dest => 
+                this.squares.get(toCoord(dest)).piece?.role === 'king'));
+
+        return canKill && [...this.squares].some(([coord, sq]) => 
+            sq.piece && !sq.piece.tapped &&
+            this.basicDests(toKey(coord)).length);
+    }
+
     isLegal(move: ttc.Move): boolean {
         const dream = this.copy();
 
         if(!dream.makeMove(move))
             return false; 
         
-        const castle: ttc.Key = (
+        const castlePath: ttc.Key[] = (
             this.squares.get(toCoord(move.orig))?.piece?.role === 'king'
             && move.orig[1] === move.dest[1] 
             && Math.abs(move.orig[0] - move.dest[0]) === 2) ?
-            [(move.orig[0] + move.dest[0]) >> 1, move.orig[1]] : null;
+            [[move.orig[0], move.orig[1]], 
+             [(move.orig[0] + move.dest[0]) >> 1, move.orig[1]],
+             [move.dest[0], move.orig[1]]] : [];
 
-        return ![...dream.squares]
+        return !dream.canWin() && ![...dream.squares]
             .filter(([_, square]) => square.piece?.color === dream.turn)
             .flatMap(([coord, _]) => dream.basicDests(toKey(coord)))
             .some(dest => (piece => piece?.tapped || 
-                    (piece?.role === 'king' && dream.isResolved(dream.turn))
+                    (piece?.role === 'king' && !dream.killer
+                    && dream.isResolved(dream.turn))
                 )(dream.squares.get(toCoord(dest)).piece) || 
-                    (castle && sameKey(dest, castle)));
+                    castlePath.some(key => sameKey(key, dest)));
     }
 
     legalDests(orig: ttc.Key, blinks: ttc.Key[]): ttc.Key[] {
@@ -662,25 +714,50 @@ export class Board {
 
     hasLegalPlays(blinks: ttc.Key[]): boolean {
         return [...this.squares].some(([coord, _]) => 
-            this.legalDests(toKey(coord), blinks))
+            this.legalDests(toKey(coord), blinks).length)
     }
 
     hasLegalTaps(blinks: ttc.Key[]): boolean {
         return [...this.squares].some(([coord, _]) => 
-            this.legalTaps(toKey(coord), blinks))
+            this.legalTaps(toKey(coord), blinks).length)
     }
 
     hasLegalMoves(blinks: ttc.Key[]): boolean {
-        return this.hasLegalPlays(blinks) ||
-            this.hasLegalTaps(blinks);
+        const taps = [...this.squares]
+            .filter(([_, sq]) => sq.piece?.tapped &&
+                sq.piece.color === this.turn)
+
+        const comBlinks = blinks.concat(taps.filter(([coord, sq]) => 
+            coord === toCoord(sq.piece.tapped.target) &&
+            sq.piece.role === sq.piece.tapped.role &&
+            !blinks.some(key => toCoord(key) === coord)) 
+                .map(([coord, _]) => toKey(coord)));
+
+        const wrongs = taps.filter(([coord, sq]) => 
+            coord !== toCoord(sq.piece.tapped.target) ||
+            sq.piece.role !== sq.piece.tapped.role);
+
+        return this.hasLegalPlays(comBlinks) ||
+            this.hasLegalTaps(comBlinks) ||
+            wrongs.some(([coord, sq]) => 
+                this.isLegal({
+                    orig: toKey(coord),
+                    dest: sq.piece.tapped.target,
+                    target: sq.piece.tapped.role !== sq.piece.role ? 
+                        sq.piece.tapped.role : null,
+                    blinks: comBlinks.concat([toKey(coord)])
+                })
+            );
     }
 
     canBlink(orig: ttc.Key, blinks: ttc.Key[]): boolean {
-        return inBounds(orig) &&
+        return inBounds(orig) && 
+            !blinks.some(key => sameKey(key, orig)) &&
             this.squares.get(toCoord(orig))?.piece?.color === this.turn &&
             this.hasLegalMoves(blinks.concat([orig]));
     }
 
+    /*
     inCheck(): boolean {
         const dream = this.copy();
 
@@ -693,16 +770,12 @@ export class Board {
                     (piece?.role === 'king' && dream.isResolved(dream.turn))
                 )(dream.squares.get(toCoord(dest)).piece));
     }
+    */
 
     result(): ttc.Color | 'draw' | 'none' {
-        const last = opposite(this.turn);
-
-        if(this.killer === last && this.isResolved(last))
-            return last; 
-
         if(this.hasLegalMoves([])) return 'none';
 
-        if(this.inCheck()) return last;
+        if(!this.isResolved) return opposite(this.turn);
 
         return 'draw';
     }

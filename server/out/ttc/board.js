@@ -469,21 +469,66 @@ export class Board {
                     square.piece.color === color);
         });
     }
+    canWin() {
+        const blinks = [...this.squares]
+            .filter(([_, sq]) => {
+            var _a;
+            return ((_a = sq.piece) === null || _a === void 0 ? void 0 : _a.tapped) &&
+                sq.piece.color === this.turn;
+        });
+        const wrongs = blinks.filter(([coord, sq]) => coord !== toCoord(sq.piece.tapped.target) ||
+            sq.piece.role !== sq.piece.tapped.role);
+        const unblinks = [...this.squares]
+            .flatMap(([coord, sq]) => [...sq.blinks]
+            .flatMap(([p, n]) => charToPiece(p).color === this.turn ?
+            Array(n).map(_ => [coord, charToPiece(p)]) : []));
+        if (unblinks.length + wrongs.length >= 2)
+            return false;
+        if (wrongs.length) {
+            const [coord, sq] = wrongs.at(0);
+            const dream = this.copy();
+            return dream.makeMove({
+                orig: toKey(coord),
+                dest: sq.piece.tapped.target,
+                target: sq.piece.tapped.role !== sq.piece.role ?
+                    sq.piece.tapped.role : null,
+                blinks: blinks.map(([c, _]) => toKey(c))
+            }) && dream.killer === this.turn;
+        }
+        if (unblinks.length) {
+            const unblink = unblinks.at(0), coord = unblink[0], piece = unblink[1];
+            return this.canMakeMove({
+                orig: toKey(coord),
+                target: piece.role,
+                blinks: blinks.map(([c, _]) => toKey(c))
+            }) && this.killer === this.turn;
+        }
+        const canKill = this.killer === this.turn || (!this.killer
+            && [...this.squares]
+                .filter(([_, square]) => { var _a; return ((_a = square.piece) === null || _a === void 0 ? void 0 : _a.color) === this.turn; })
+                .flatMap(([coord, _]) => this.basicDests(toKey(coord)))
+                .some(dest => { var _a; return ((_a = this.squares.get(toCoord(dest)).piece) === null || _a === void 0 ? void 0 : _a.role) === 'king'; }));
+        return canKill && [...this.squares].some(([coord, sq]) => sq.piece && !sq.piece.tapped &&
+            this.basicDests(toKey(coord)).length);
+    }
     isLegal(move) {
         var _a, _b;
         const dream = this.copy();
         if (!dream.makeMove(move))
             return false;
-        const castle = (((_b = (_a = this.squares.get(toCoord(move.orig))) === null || _a === void 0 ? void 0 : _a.piece) === null || _b === void 0 ? void 0 : _b.role) === 'king'
+        const castlePath = (((_b = (_a = this.squares.get(toCoord(move.orig))) === null || _a === void 0 ? void 0 : _a.piece) === null || _b === void 0 ? void 0 : _b.role) === 'king'
             && move.orig[1] === move.dest[1]
             && Math.abs(move.orig[0] - move.dest[0]) === 2) ?
-            [(move.orig[0] + move.dest[0]) >> 1, move.orig[1]] : null;
-        return ![...dream.squares]
+            [[move.orig[0], move.orig[1]],
+                [(move.orig[0] + move.dest[0]) >> 1, move.orig[1]],
+                [move.dest[0], move.orig[1]]] : [];
+        return !dream.canWin() && ![...dream.squares]
             .filter(([_, square]) => { var _a; return ((_a = square.piece) === null || _a === void 0 ? void 0 : _a.color) === dream.turn; })
             .flatMap(([coord, _]) => dream.basicDests(toKey(coord)))
             .some(dest => (piece => (piece === null || piece === void 0 ? void 0 : piece.tapped) ||
-            ((piece === null || piece === void 0 ? void 0 : piece.role) === 'king' && dream.isResolved(dream.turn)))(dream.squares.get(toCoord(dest)).piece) ||
-            (castle && sameKey(dest, castle)));
+            ((piece === null || piece === void 0 ? void 0 : piece.role) === 'king' && !dream.killer
+                && dream.isResolved(dream.turn)))(dream.squares.get(toCoord(dest)).piece) ||
+            castlePath.some(key => sameKey(key, dest)));
     }
     legalDests(orig, blinks) {
         var _a, _b, _c;
@@ -510,38 +555,60 @@ export class Board {
             .map(([coord, _]) => toKey(coord));
     }
     hasLegalPlays(blinks) {
-        return [...this.squares].some(([coord, _]) => this.legalDests(toKey(coord), blinks));
+        return [...this.squares].some(([coord, _]) => this.legalDests(toKey(coord), blinks).length);
     }
     hasLegalTaps(blinks) {
-        return [...this.squares].some(([coord, _]) => this.legalTaps(toKey(coord), blinks));
+        return [...this.squares].some(([coord, _]) => this.legalTaps(toKey(coord), blinks).length);
     }
     hasLegalMoves(blinks) {
-        return this.hasLegalPlays(blinks) ||
-            this.hasLegalTaps(blinks);
+        const taps = [...this.squares]
+            .filter(([_, sq]) => {
+            var _a;
+            return ((_a = sq.piece) === null || _a === void 0 ? void 0 : _a.tapped) &&
+                sq.piece.color === this.turn;
+        });
+        const comBlinks = blinks.concat(taps.filter(([coord, sq]) => coord === toCoord(sq.piece.tapped.target) &&
+            sq.piece.role === sq.piece.tapped.role &&
+            !blinks.some(key => toCoord(key) === coord))
+            .map(([coord, _]) => toKey(coord)));
+        const wrongs = taps.filter(([coord, sq]) => coord !== toCoord(sq.piece.tapped.target) ||
+            sq.piece.role !== sq.piece.tapped.role);
+        return this.hasLegalPlays(comBlinks) ||
+            this.hasLegalTaps(comBlinks) ||
+            wrongs.some(([coord, sq]) => this.isLegal({
+                orig: toKey(coord),
+                dest: sq.piece.tapped.target,
+                target: sq.piece.tapped.role !== sq.piece.role ?
+                    sq.piece.tapped.role : null,
+                blinks: comBlinks.concat([toKey(coord)])
+            }));
     }
     canBlink(orig, blinks) {
         var _a, _b;
         return inBounds(orig) &&
+            !blinks.some(key => sameKey(key, orig)) &&
             ((_b = (_a = this.squares.get(toCoord(orig))) === null || _a === void 0 ? void 0 : _a.piece) === null || _b === void 0 ? void 0 : _b.color) === this.turn &&
             this.hasLegalMoves(blinks.concat([orig]));
     }
-    inCheck() {
+    /*
+    inCheck(): boolean {
         const dream = this.copy();
+
         dream.turn = opposite(this.turn);
+
         return ![...dream.squares]
-            .filter(([_, square]) => { var _a; return ((_a = square.piece) === null || _a === void 0 ? void 0 : _a.color) === dream.turn; })
+            .filter(([_, square]) => square.piece?.color === dream.turn)
             .flatMap(([coord, _]) => dream.basicDests(toKey(coord)))
-            .some(dest => (piece => (piece === null || piece === void 0 ? void 0 : piece.tapped) ||
-            ((piece === null || piece === void 0 ? void 0 : piece.role) === 'king' && dream.isResolved(dream.turn)))(dream.squares.get(toCoord(dest)).piece));
+            .some(dest => (piece => piece?.tapped ||
+                    (piece?.role === 'king' && dream.isResolved(dream.turn))
+                )(dream.squares.get(toCoord(dest)).piece));
     }
+    */
     result() {
-        const last = opposite(this.turn);
-        if (this.killer === last && this.isResolved(last))
-            return last;
         if (this.hasLegalMoves([]))
             return 'none';
-        if (this.inCheck())
-            return last;
+        if (!this.isResolved)
+            return opposite(this.turn);
         return 'draw';
     }
 }

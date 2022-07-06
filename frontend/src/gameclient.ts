@@ -133,6 +133,14 @@ export class GameClient {
                         .map(([p, n]) => charToPiece(p).role);
 
                     if(roles.length === 0) return;
+
+                    const blinks = this.cg.getBlinks().map(toKey);
+
+                    if(!this.game.board.isLegal({
+                        orig: toKey(key),
+                        target: roles.at(0),
+                        blinks 
+                    })) return;
                     
                     this.sel.start(key, roles, this.color,
                         sr => {
@@ -141,9 +149,6 @@ export class GameClient {
                                 target: sr,
                                 blinks: this.cg.getBlinks().map(toKey)
                             };
-
-                            if(!this.game.board.isLegal(move))
-                                return;
                             
                             this.emit(new MakeMove(move));
 
@@ -317,6 +322,8 @@ export class GameClient {
     }
 
     setDestsMap() {
+        console.time();
+
         const coords = files.flatMap(file => 
             ranks.map(rank => `${file}${rank}` as Key));
 
@@ -336,6 +343,8 @@ export class GameClient {
                     this.game.board.canBlink(toKey(coord), blinks)) 
             }
         });
+
+        console.timeEnd();
     }
 
     setState(state: ReceivedGameState) {
