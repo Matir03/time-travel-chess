@@ -481,7 +481,7 @@ export class Board {
         const unblinks = [...this.squares]
             .flatMap(([coord, sq]) => [...sq.blinks]
             .flatMap(([p, n]) => charToPiece(p).color === this.turn ?
-            Array(n).map(_ => [coord, charToPiece(p)]) : []));
+            Array.from({ length: n }, _ => coord) : []));
         if (unblinks.length + wrongs.length >= 2)
             return false;
         if (wrongs.length) {
@@ -496,12 +496,9 @@ export class Board {
             }) && dream.killer === this.turn;
         }
         if (unblinks.length) {
-            const unblink = unblinks.at(0), coord = unblink[0], piece = unblink[1];
-            return this.canMakeMove({
-                orig: toKey(coord),
-                target: piece.role,
-                blinks: blinks.map(([c, _]) => toKey(c))
-            }) && this.killer === this.turn;
+            const coord = unblinks.at(0);
+            return this.isEmpty(toKey(coord)) &&
+                this.killer === this.turn;
         }
         const canKill = this.killer === this.turn || (!this.killer
             && [...this.squares]

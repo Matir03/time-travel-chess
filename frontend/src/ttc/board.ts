@@ -16,14 +16,6 @@ export function sameColor(key1: ttc.Key, key2: ttc.Key): boolean {
     return (key1[0] + key2[0] + key1[1] + key2[1]) % 2 === 0;
 }
 
-function incrementBlinks(blinks: ttc.Blinks, piece: ttc.Piece) {
-    const pname = pieceToChar(piece); 
-
-    const k = blinks.get(pname) ?? 0;
-
-    blinks.set(pname, k + 1);       
-}
-
 function pieceToChar(piece: ttc.Piece): string {
     return String.fromCharCode(
         ttc.role2sym[piece.role].charCodeAt(0) + 
@@ -55,6 +47,7 @@ export function toCoord(key: ttc.Key): string {
 export class Board {
     
     squares: Map<string, ttc.Square>;
+    blinks: Map<string, Map<string, number>>;
     turn: ttc.Color;
     castling: ttc.Castling;
     enpassant: number;
@@ -68,6 +61,10 @@ export class Board {
         const records = fen.split(' ');
 
         board.squares = new Map();
+        board.blinks = new Map(ttc.syms.flatMap(s => [
+            [s, new Map()], 
+            [s.toLowerCase(), new Map()]
+        ]));
 
         for(let x = 1; x <= 8; x++) 
             for(let y = 1; y <= 8; y++) 
@@ -130,8 +127,7 @@ export class Board {
                     const piece = charToPiece(c);
 
                     if(blink) {
-                        incrementBlinks(board.squares.get(toCoord([x, y])).blinks,
-                            piece)
+                        board.blink([x, y], piece);
                     } else {
                         x += 1;
                         board.squares.get(toCoord([x, y])).piece = piece;
@@ -258,6 +254,9 @@ export class Board {
                 })
             }
         }
+
+        board.blinks = new Map([...this.blinks].map(
+            ([s, m]) => [s, new Map(m)]));
 
         board.castling = {
             short: {...this.castling.short},
@@ -568,10 +567,7 @@ export class Board {
                     this.halfmoves++;
                 }
             } else {
-                const k = this.squares.get(toCoord(move.orig))
-                    .blinks.get(targetName);
-                this.squares.get(toCoord(move.orig))
-                    .blinks.set(targetName, k - 1);
+                this.unblink(move.orig, basicTarget);
 
                 this.squares.get(toCoord(move.orig)).piece = basicTarget;
             }
@@ -589,8 +585,7 @@ export class Board {
 
             if(piece.tapped) return;      
 
-            incrementBlinks(this.squares.get(toCoord(key)).blinks,
-                {role: piece.role, color: piece.color});
+            this.blink(key, {role: piece.role, color: piece.color});
             
             if(key === [8, r]) 
                 this.castling.short[this.turn] = false;
@@ -778,5 +773,29 @@ export class Board {
         if(!this.isResolved) return opposite(this.turn);
 
         return 'draw';
+    }
+
+    blink(key: ttc.Key, piece: ttc.Piece) {
+        const pname = pieceToChar(piece); 
+        const sqname = toCoord(key);
+
+        const blinks = this.squares.get(sqname).blinks;
+    
+        const ksq = blinks.get(pname) ?? 0;    
+        blinks.set(pname, ksq + 1);       
+
+        this.blinks.get(pname).set(sqname, ksq + 1);
+    }
+
+    unblink(key: ttc.Key, piece: ttc.Piece) {
+        const pname = pieceToChar(piece); 
+        const sqname = toCoord(key);
+
+        const blinks = this.squares.get(sqname).blinks;
+        const ksq = blinks.get(pname);
+
+        blinks.set(pname, ksq - 1);       
+
+        this.blinks.get(pname).set(sqname, ksq - 1);
     }
 }

@@ -436,11 +436,65 @@ export class GameClient {
         }
     }
 
-    view(): VNode {
-        return h('div#root', {hook: {
-            postpatch: (old, vnode) => {
-                vnode.elm.appendChild(this.cgNode);
+    view(): VNode {  
+
+        const blinkPanel = (color: Color) => {
+            const activeColor = color === this.color &&
+                color === this.game.board.turn;
+
+            const piece = (role: Role) => {
+                const count = [...this.game.board.blinks
+                    .get(pieceToChar({role, color}))]
+                    .map(([s, n]) => n)
+                    .reduce((m, n) => m + n, 0);
+                
+                return h('piece', {
+                    class: {
+                        [color] : true,
+                        [role] : true,
+                        "active": !!count && activeColor   
+                    }, 
+                    attrs: {
+                        "data-nb": count,
+                    }
+                })
             }
-        }});
+
+            return h('div', {class: {
+                ['blink'] : true,
+                [`blink-${color}`] : true, 
+                [`blink-top`] : color !== this.color,
+                [`blink-bot`] : color === this.color,
+            }}, ['pawn', 'knight', 'bishop', 'rook', 'queen']
+                .map(piece)
+            )
+        }
+
+        const region = (rname: string, color: Color) => 
+            h('div', {class: {
+                [`${rname}-${color}`] : true, 
+                [`${rname}-top`] : color !== this.color,
+                [`${rname}-bot`] : color === this.color,
+            }});
+
+        const movelist = h('div#movelist');
+        const controls = h('div#controls');
+        const chat = h('div#chat');
+
+        return h('div#root.game', {
+            hook: {
+                insert: (vnode) => {
+                    vnode.elm.appendChild(this.cgNode);
+                }
+            }
+        }, [
+            blinkPanel('white'),
+            blinkPanel('black'),
+            region('clock', 'white'),
+            region('clock', 'black'),
+            movelist,
+            controls,
+            chat,
+        ]);
     }
 }
