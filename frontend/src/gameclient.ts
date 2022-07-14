@@ -12,6 +12,11 @@ import { unselect } from './chessground/board';
 import { Game } from './ttc/game';
 import { toCoord, toKey } from './ttc/board';
 
+interface UIElement {
+    vnode: VNode;
+    update: () => VNode;
+}
+
 const patch = init([
     attributesModule,
     classModule,
@@ -97,10 +102,17 @@ export class GameClient {
     oldLastMove: Key[];
     selected: Key;
 
+    ui: UIElement[];
+
     constructor(pname: string, 
         emit: (action: GameAction) => void) {
+        
         this.pname = pname;
-        this.emit = emit;
+        
+        this.emit = action => {
+            this.updateView();
+            emit(action);
+        }
 
         this.cgNode = document.createElement('div');
         this.cgNode.id = "chessground";
@@ -123,7 +135,7 @@ export class GameClient {
                 keys: [],
 
                 onBlink: (key) => {
-                    this.setDestsMap();
+                    this.updateView();
                 },
 
                 unblinker: (key) => {
@@ -157,7 +169,7 @@ export class GameClient {
                                 color: this.color
                             });
 
-                            this.setDestsMap();
+                            this.updateView();
                         },
                     );
                 }
@@ -179,6 +191,11 @@ export class GameClient {
                     this.sel.view() || h('div'));
             }
         )
+
+        this.ui = [
+            {vnode: h('div'), update: () => this.blinkPanel('white')},
+            {vnode: h('div'), update: () => this.blinkPanel('black')},
+        ];
     }
 
     afterMove(orig: Key, dest: Key, blinks: Key[], meta: MoveMetadata) {
@@ -211,7 +228,7 @@ export class GameClient {
                     this.emit(new MakeMove(move)); 
                     promote(this.cg, dest, sr);
                     this.cg.endTurn();
-                    this.setDestsMap();
+                    this.updateView();
                 },
                 () => {
                     this.cg.state.pieces.set(orig, piece);
@@ -223,7 +240,7 @@ export class GameClient {
                     }
 
                     this.cg.state.lastMove = this.oldLastMove;
-                    this.setDestsMap();
+                    this.updateView();
 
                     this.cg.redrawAll();
                 }
@@ -231,7 +248,7 @@ export class GameClient {
         } else {
             this.emit(new MakeMove(move));
             this.cg.endTurn();
-            this.setDestsMap();
+            this.updateView();
         }
     }
 
@@ -287,7 +304,7 @@ export class GameClient {
                             
                             this.emit(new MakeMove(move));
                             tap(this.cg, orig, key, sr);  
-                            this.setDestsMap();
+                            this.updateView();
                         },
                         () => {
                             unselect(this.cg.state);
@@ -299,12 +316,12 @@ export class GameClient {
                         return;
                     this.emit(new MakeMove(move)); 
                     tap(this.cg, this.selected, key);   
-                    this.setDestsMap();
+                    this.updateView();
                 }                     
 
                 this.selected = null;
                 this.cg.state.selected = null;
-            }
+            } 
         } else {
             if(this.selected === key || 
                 this.game.board.legalTaps(toKey(key), 
@@ -322,8 +339,6 @@ export class GameClient {
     }
 
     setDestsMap() {
-        console.time();
-
         const coords = files.flatMap(file => 
             ranks.map(rank => `${file}${rank}` as Key));
 
@@ -343,8 +358,6 @@ export class GameClient {
                     this.game.board.canBlink(toKey(coord), blinks)) 
             }
         });
-
-        console.timeEnd();
     }
 
     setState(state: ReceivedGameState) {
@@ -356,7 +369,11 @@ export class GameClient {
         this.other = opposite(this.color);
 
         this.game = new Game(state.game);
-        
+
+        this.syncCg();
+    }
+
+    syncCg() {
         this.cg.set({
             fen: "8/8/8/8/8/8/8/8",
             orientation: this.color,
@@ -380,7 +397,7 @@ export class GameClient {
                 });
         });
 
-        const lastMove = state.game.at(-1);
+        const lastMove = this.state.game.at(-1);
 
         if(lastMove) {
             this.cg.state.lastMove = [toCoord(lastMove.orig) as Key];
@@ -388,8 +405,6 @@ export class GameClient {
             if(lastMove.dest) 
                 this.cg.state.lastMove.push(toCoord(lastMove.dest) as Key);
         }
-
-        this.setDestsMap();
     }
 
     update(event: GameEvent) {
@@ -404,6 +419,8 @@ export class GameClient {
                 console.log("Illegal move!");
                 return;
             }
+
+            this.updateView();
             
             if(color === this.color) return;
 
@@ -431,70 +448,85 @@ export class GameClient {
                 tap(this.cg, toCoord(move.orig) as Key, 
                     toCoord(move.dest) as Key, move.target);
             }
-
-            this.setDestsMap();
         }
     }
 
-    view(): VNode {  
+    blinkPanel (color: Color): VNode {
+        const wakeUp = () => {
+            this.cgNode.classList.remove('dream');
+            this.syncCg();      
+            this.cg.redrawAll();                  
+        };
 
-        const blinkPanel = (color: Color) => {
-            const activeColor = color === this.color &&
-                color === this.game.board.turn;
+        const pieceTag = (role: Role) => {
+            const blinks = [...this.game.board.blinks
+                .get(pieceToChar({role, color}))];
+            
+            const count = blinks
+                .map(([s, n]) => n)
+                .reduce((m, n) => m + n, 0);
+            
+            return h('div.blink-wrap', [h('piece', {
+                class: {
+                    [color] : true,
+                    [role] : true,
+                    "active": !!count
+                }, 
+                attrs: {
+                    "data-nb": count,
+                },
+                on: count ? {
+                    mousedown: () => {
+                        if(this.cgNode.classList.contains('dream')) {
+                            wakeUp();
+                            return;
+                        }
 
-            const piece = (role: Role) => {
-                const count = [...this.game.board.blinks
-                    .get(pieceToChar({role, color}))]
-                    .map(([s, n]) => n)
-                    .reduce((m, n) => m + n, 0);
-                
-                return h('piece', {
-                    class: {
-                        [color] : true,
-                        [role] : true,
-                        "active": !!count && activeColor   
-                    }, 
-                    attrs: {
-                        "data-nb": count,
-                    }
-                })
-            }
+                        this.cgNode.classList.add('dream');
 
-            return h('div', {class: {
-                ['blink'] : true,
-                [`blink-${color}`] : true, 
-                [`blink-top`] : color !== this.color,
-                [`blink-bot`] : color === this.color,
-            }}, ['pawn', 'knight', 'bishop', 'rook', 'queen']
-                .map(piece)
-            )
+                        this.cg.state.lastMove = [];
+                        this.cg.state.pieces.clear();
+                        
+                        blinks.forEach(([k, quantity]) => 
+                            this.cg.state.pieces.set(
+                                k as Key, {
+                                    role, color, quantity
+                                }
+                            )
+                        )
+                        
+                        this.cg.redrawAll();
+                    },
+                    mouseleave: () => wakeUp()
+                } : {}
+            })])
         }
 
-        const region = (rname: string, color: Color) => 
-            h('div', {class: {
-                [`${rname}-${color}`] : true, 
-                [`${rname}-top`] : color !== this.color,
-                [`${rname}-bot`] : color === this.color,
-            }});
+        return h('div', {class: {
+            ['blink'] : true,
+            [`blink-${color}`] : true, 
+            [`blink-top`] : color !== this.color,
+            [`blink-bot`] : color === this.color,
+        }}, ['pawn', 'knight', 'bishop', 'rook', 'queen']
+            .map(pieceTag)
+        )
+    }
 
-        const movelist = h('div#movelist');
-        const controls = h('div#controls');
-        const chat = h('div#chat');
+    updateView() {
+        this.setDestsMap();
 
+        this.ui.forEach(({vnode, update}, i) => 
+            this.ui[i].vnode = patch(vnode, update()))
+    }
+
+    view(): VNode { 
         return h('div#root.game', {
             hook: {
                 insert: (vnode) => {
                     vnode.elm.appendChild(this.cgNode);
+                    this.updateView();
                 }
             }
-        }, [
-            blinkPanel('white'),
-            blinkPanel('black'),
-            region('clock', 'white'),
-            region('clock', 'black'),
-            movelist,
-            controls,
-            chat,
-        ]);
+        }, this.ui.map(elm => elm.vnode = elm.update()));
     }
 }

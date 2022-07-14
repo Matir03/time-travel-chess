@@ -71,12 +71,14 @@ piece.fading {
   opacity: 0.5;
 }
 
-.cg-wrap piece.ghost {
+.cg-wrap piece.ghost,
+.cg-wrap piece.blinked,
+.cg-wrap piece.hover {
   opacity: 0.3;
 }
 
-.cg-wrap piece.blinked {
-  opacity: 0.3;
+.dream piece {
+  opacity: 0.4;
 }
 
 .cg-wrap piece svg {

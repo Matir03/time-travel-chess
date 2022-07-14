@@ -5,6 +5,7 @@ import { drop } from './drop';
 import { isRightButton } from './util';
 import * as cg from './types';
 import { blink } from './blink';
+import { handleHover } from './hover';
 
 type MouchBind = (e: cg.MouchEvent) => void;
 type StateMouchBind = (d: State, e: cg.MouchEvent) => void;
@@ -66,6 +67,8 @@ function unbindable(
 
 function startDragOrDraw(s: State): MouchBind {
   return e => {
+    handleHover(s, e);
+    
     if (s.draggable.current) drag.cancel(s);
     else if (s.drawable.current) draw.cancel(s);
     else if (e.shiftKey || isRightButton(e)) {
@@ -80,6 +83,8 @@ function startDragOrDraw(s: State): MouchBind {
 
 function dragOrDraw(s: State, withDrag: StateMouchBind, withDraw: StateMouchBind): MouchBind {
   return e => {
+    handleHover(s, e);
+
     if (s.drawable.current) {
       if (s.drawable.enabled) withDraw(s, e);
     } else if (!s.viewOnly) withDrag(s, e);

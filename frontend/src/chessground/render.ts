@@ -45,6 +45,19 @@ export function render(s: State): void {
       anim = anims.get(k);
       fading = fadings.get(k);
       elPieceName = el.cgPiece;
+
+      // hover piece
+      if (el.classList.contains('hover')) {
+        const newEl = el.nextSibling as cg.PieceNode | cg.SquareNode | undefined;
+        
+        if(!s.hover) {
+          boardEl.removeChild(el);
+        }
+
+        el = newEl;
+        continue;
+      }
+
       // if piece not being dragged anymore, remove dragging style
       if (el.cgDragging && (!curDrag || curDrag.orig !== k)) {
         el.classList.remove('dragging');
@@ -73,7 +86,8 @@ export function render(s: State): void {
           if (s.addPieceZIndex) el.style.zIndex = posZIndex(key2pos(k), asWhite);
         }
         // same piece: flag as same
-        if (elPieceName === pieceNameOf(pieceAtKey) && (!fading || !el.cgFading)) {
+        if (elPieceName === pieceNameOf(pieceAtKey) && (!fading || !el.cgFading)
+          && k !== s.hover?.target) {
           samePieces.add(k);
         }
         // different piece: flag as moved unless it is a fading piece
@@ -120,7 +134,10 @@ export function render(s: State): void {
   // walk over all pieces in current set, apply dom changes to moved pieces
   // or append new pieces
   for (const [k, p] of pieces) {
+    if(k === s.hover?.target) continue;
+
     anim = anims.get(k);
+
     if (!samePieces.has(k)) {
       pMvdset = movedPieces.get(pieceNameOf(p));
       pMvd = pMvdset && pMvdset.pop();
@@ -156,6 +173,9 @@ export function render(s: State): void {
           pos[0] += anim[2];
           pos[1] += anim[3];
         }
+        if(p.quantity) 
+          pieceNode.setAttribute('data-nb', p.quantity.toString());
+
         translate(pieceNode, posToTranslate(pos, asWhite));
 
         if (s.addPieceZIndex) pieceNode.style.zIndex = posZIndex(pos, asWhite);
@@ -163,6 +183,21 @@ export function render(s: State): void {
         boardEl.appendChild(pieceNode);
       }
     }
+  }
+
+  if(s.hover) {
+    const pieceName = pieceNameOf(s.hover.piece),
+      hoverNode = createEl('piece', `hover ${pieceName}`) as cg.PieceNode,
+      pos = key2pos(s.hover.target);
+
+    hoverNode.cgPiece = pieceName;
+    hoverNode.cgKey = k;
+    
+    translate(hoverNode, posToTranslate(pos, asWhite));
+
+    if (s.addPieceZIndex) hoverNode.style.zIndex = posZIndex(pos, asWhite);
+
+    boardEl.appendChild(hoverNode);
   }
 
   // remove any element that remains in the moved sets
@@ -218,8 +253,9 @@ function posZIndex(pos: cg.Pos, asWhite: boolean): string {
 }
 
 function pieceNameOf(piece: cg.Piece): string {
-  return `${piece.tapped ? 'tapped ' : ''}${piece.blinking ?
-    'blinked ' : ''}${piece.color} ${piece.role}`;
+  return `${piece.quantity > 1 ? 'quantified' : ''} ${piece.tapped 
+    ? 'tapped ' : ''}${piece.blinking ? 'blinked ' : ''}${
+      piece.color} ${piece.role}`;
 }
 
 function computeSquareClasses(s: State): SquareClasses {

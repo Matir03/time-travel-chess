@@ -14,6 +14,7 @@ export interface Piece {
     role: Role
   };
   blinking?: boolean;
+  quantity?: number;
 }
 
 export interface Drop {
@@ -24,6 +25,11 @@ export interface Drop {
 export type Pieces = Map<Key, Piece>;
 export type Blinked = Map<Key, Map<string, number>>;
 export type PiecesDiff = Map<Key, Piece | undefined>;
+
+export interface Hover {
+  piece: Piece,
+  keys: Map<Key, number>
+}
 
 export type KeyPair = [Key, Key];
 

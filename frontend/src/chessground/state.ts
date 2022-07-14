@@ -13,6 +13,10 @@ export interface HeadlessState {
   check?: cg.Key; // square currently in check "a2"
   lastMove?: cg.Key[]; // squares part of the last move ["c3"; "c4"]
   selected?: cg.Key; // square currently selected "a1"
+  hover?: {
+    target: cg.Key;
+    piece: cg.Piece;
+  }; 
   coordinates: boolean; // include coords attributes
   ranksPosition: cg.RanksPosition; // position ranks on either side. left | right
   autoCastle: boolean; // immediately complete the castle by moving the rook after king move
