@@ -30,7 +30,7 @@ export interface Config {
   movable?: {
     free?: boolean; // all moves are valid - board editor
     color?: cg.Color | 'both'; // color that can move. white | black | both | undefined
-    dests?: cg.Dests; // valid moves. {"a2" ["a3" "a4"] "b1" ["a3" "c3"]}
+    dests?: (key: cg.Key) => cg.Key[]; // valid moves. {"a2" ["a3" "a4"] "b1" ["a3" "c3"]}
     showDests?: boolean; // whether to add the move-dest class on squares
     events?: {
       after?: (orig: cg.Key, dest: cg.Key, blinks: cg.Key[], metadata: cg.MoveMetadata) => void; // called after the move has been played
@@ -39,7 +39,7 @@ export interface Config {
     rookCastle?: boolean; // castle by moving the king to the rook
   };
   blinkable?: {
-    keys?: cg.Key[],
+    keys?: (key: cg.Key) => boolean,
     onBlink?: cg.BlinkHandler,
     unblinker?: cg.BlinkHandler
   }
@@ -128,6 +128,7 @@ export function configure(state: HeadlessState, config: Config): void {
 
   applyAnimation(state, config);
 
+  /*
   if (!state.movable.rookCastle && state.movable.dests) {
     const rank = state.movable.color === 'white' ? '1' : '8',
       kingStartPos = ('e' + rank) as cg.Key,
@@ -141,8 +142,9 @@ export function configure(state: HeadlessState, config: Config): void {
           !(d === 'a' + rank && dests.includes(('c' + rank) as cg.Key)) &&
           !(d === 'h' + rank && dests.includes(('g' + rank) as cg.Key))
       )
-    );
+    ); 
   }
+  */
 }
 
 function deepMerge(base: any, extend: any): void {

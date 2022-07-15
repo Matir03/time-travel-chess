@@ -95,6 +95,7 @@ export class GameClient {
 
     sel: PieceSelector;
     selNode: VNode;
+    selecting: boolean;
 
     color: Color;
     other: Color;
@@ -132,8 +133,6 @@ export class GameClient {
             premovable: {enabled: false},
 
             blinkable: {
-                keys: [],
-
                 onBlink: (key) => {
                     this.updateView();
                 },
@@ -171,6 +170,9 @@ export class GameClient {
 
                             this.updateView();
                         },
+                        () => {
+                            this.selecting = false;
+                        }
                     );
                 }
             },
@@ -184,18 +186,23 @@ export class GameClient {
 
         this.sel = new PieceSelector(
             f => f(this.cg),
-            () => {
-                this.cgNode.appendChild(this.selNode.elm);
-
-                this.selNode = patch(this.selNode,
-                    this.sel.view() || h('div'));
-            }
+            () => this.drawSel()
         )
+        
+        this.selecting = false;
 
         this.ui = [
             {vnode: h('div'), update: () => this.blinkPanel('white')},
             {vnode: h('div'), update: () => this.blinkPanel('black')},
         ];
+    }
+
+    drawSel() {
+        this.selecting = true;
+        this.cgNode.appendChild(this.selNode.elm);
+
+        this.selNode = patch(this.selNode,
+            this.sel.view() || h('div'));
     }
 
     afterMove(orig: Key, dest: Key, blinks: Key[], meta: MoveMetadata) {
@@ -232,6 +239,7 @@ export class GameClient {
                 },
                 () => {
                     this.cg.state.pieces.set(orig, piece);
+                    this.selecting = false;
 
                     if(meta.captured) {
                         this.cg.state.pieces.set(dest, meta.captured);
@@ -307,6 +315,7 @@ export class GameClient {
                             this.updateView();
                         },
                         () => {
+                            this.selecting = false;
                             unselect(this.cg.state);
                             this.cg.redrawAll();
                         }
@@ -339,23 +348,19 @@ export class GameClient {
     }
 
     setDestsMap() {
-        const coords = files.flatMap(file => 
-            ranks.map(rank => `${file}${rank}` as Key));
-
         const blinks = this.cg.getBlinks().map(toKey);
 
         this.cg.set({
             movable: {
-                dests: new Map(coords.map(coord => [coord, 
+                dests: coord =>  
                     (this.game.board.isEmpty(toKey(coord)) ?
                     this.game.board.legalTaps(toKey(coord), blinks) :
                     this.game.board.legalDests(toKey(coord), blinks)) 
                         .map(toCoord) as Key[]
-                    ])) 
             },
             blinkable: {
-                keys: coords.filter(coord => 
-                    this.game.board.canBlink(toKey(coord), blinks)) 
+                keys: coord => 
+                    this.game.board.canBlink(toKey(coord), blinks) 
             }
         });
     }
@@ -455,7 +460,8 @@ export class GameClient {
         const wakeUp = () => {
             this.cgNode.classList.remove('dream');
             this.syncCg();      
-            this.cg.redrawAll();                  
+            this.cg.redrawAll();        
+            if(this.selecting) this.drawSel();
         };
 
         const pieceTag = (role: Role) => {
@@ -476,12 +482,7 @@ export class GameClient {
                     "data-nb": count,
                 },
                 on: count ? {
-                    mousedown: () => {
-                        if(this.cgNode.classList.contains('dream')) {
-                            wakeUp();
-                            return;
-                        }
-
+                    mouseenter: () => {
                         this.cgNode.classList.add('dream');
 
                         this.cg.state.lastMove = [];
@@ -514,7 +515,7 @@ export class GameClient {
 
     updateView() {
         this.setDestsMap();
-
+        
         this.ui.forEach(({vnode, update}, i) => 
             this.ui[i].vnode = patch(vnode, update()))
     }

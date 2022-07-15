@@ -38,7 +38,7 @@ export interface HeadlessState {
   movable: {
     free: boolean; // all moves are valid - board editor
     color?: cg.Color | 'both'; // color that can move. white | black | both
-    dests?: cg.Dests; // valid moves. {"a2" ["a3" "a4"] "b1" ["a3" "c3"]}
+    dests: (key: cg.Key) => cg.Key[]; // valid moves. {"a2" ["a3" "a4"] "b1" ["a3" "c3"]}
     showDests: boolean; // whether to add the move-dest class on squares
     events: {
       after?: (orig: cg.Key, dest: cg.Key, blinks: cg.Key[], metadata: cg.MoveMetadata) => void; // called after the move has been played
@@ -47,7 +47,7 @@ export interface HeadlessState {
     rookCastle: boolean; // castle by moving the king to the rook
   };
   blinkable?: {
-    keys: cg.Key[],
+    keys: (key: cg.Key) => boolean,
     onBlink: (key: cg.Key) => void,
     unblinker: cg.BlinkHandler
   };
@@ -140,12 +140,13 @@ export function defaults(): HeadlessState {
     movable: {
       free: true,
       color: 'both',
+      dests: () => [],
       showDests: true,
       events: {},
       rookCastle: true,
     },
     blinkable: {
-      keys: [],
+      keys: () => false,
       onBlink: (key: cg.Key) => {},
       unblinker: () => null
     },

@@ -250,7 +250,7 @@ function isMovable(state: HeadlessState, orig: cg.Key): boolean {
 
 export function canMove(state: HeadlessState, orig: cg.Key, dest: cg.Key): boolean {
   return (
-    orig !== dest && isMovable(state, orig) && (state.movable.free || !!state.movable.dests?.get(orig)?.includes(dest))
+    orig !== dest && isMovable(state, orig) && (state.movable.free || !!state.movable.dests(orig).includes(dest))
   );
 }
 
