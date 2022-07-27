@@ -1,9 +1,0 @@
-{
-    "compilerOptions": {
-      "outDir": "./out",
-      "rootDir": "./src",
-      "moduleResolution": "node",
-      "target": "ES2018",
-      "module": "esnext",
-    }
-}
