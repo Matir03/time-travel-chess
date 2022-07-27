@@ -7,6 +7,8 @@ import { attributesModule, classModule, eventListenersModule, h, init,
 import { ClientToServerEvents, ServerToClientEvents } from './commontypes';
 import { Board } from './ttc/board';
 
+console.log("The source code for this project is available at https://github.com/Matir03/time-travel-chess");
+
 const patch = init([
     attributesModule,
     classModule,
