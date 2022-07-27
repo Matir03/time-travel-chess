@@ -1,0 +1,6 @@
+[submodule "frontend"]
+	path = frontend
+	url = https://github.com/Matir03/ttc-frontend
+[submodule "server"]
+	path = server
+	url = https://github.com/Matir03/ttc-server
