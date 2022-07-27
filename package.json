@@ -1,0 +1,9 @@
+{
+  "name": "time-travel-chess",
+  "version": "1.0.0",
+  "description": "Time Travel Chess implementation",
+  "scripts": {
+    "build": "./build.sh",
+    "serve": "./serve.sh"
+  }
+}

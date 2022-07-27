@@ -4,7 +4,8 @@
   "description": "Frontend for Time Travel Chess",
   "main": "dist/main.js",
   "scripts": {
-    "build": "webpack",
+    "dev": "webpack --mode=development",
+    "prod": "webpack --mode=production",
     "serve": "http-server"
   },
   "dependencies": {
